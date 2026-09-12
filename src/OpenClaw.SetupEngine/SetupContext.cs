@@ -595,6 +595,7 @@ public sealed class SetupContext
         : null;
     internal LocalAiResolvedInstall? LocalAiRecoveryOriginalInstall { get; set; }
     internal LocalAiResolvedInstall? LocalAiUpgradeOriginalInstall { get; set; }
+    internal LocalAiResolvedInstall? LocalAiRecoveryPendingInstall { get; set; }
     internal bool LocalAiRecoveryProviderTransition { get; set; }
     internal bool LocalAiRecoveryReceiptRollbackAllowed { get; set; }
     internal bool LocalAiManifestCreatedThisRun { get; set; }
