@@ -1339,6 +1339,17 @@ internal sealed class ChatConversationState
         var hasMediaEnvelope = projection?.HasMediaEnvelope ?? false;
         lock (_gate)
         {
+            if (role is "assistant" or "toolresult" or "tool_result" &&
+                _lifecycle.IsCancelledRun(message.RunId))
+            {
+                return new(
+                    Drop: false,
+                    Suppressed: true,
+                    RequestRemoteBackfill: false,
+                    Snapshot: null,
+                    OpenedLifecycle: null,
+                    CurrentRuntimeGenerationLocked(threadId));
+            }
             _lifecycle.TryGetActiveRun(
                 threadId,
                 out var activeRunId);
@@ -1352,7 +1363,8 @@ internal sealed class ChatConversationState
                         text,
                         attachmentCorrelationSignature,
                         hasMediaEnvelope),
-                    activeRunId);
+                    activeRunId,
+                    message.RunId);
             var openedLifecycle =
                 ApplyBufferedLifecycleOpenLocked(
                     threadId,
@@ -1926,11 +1938,23 @@ internal sealed class ChatConversationState
         }
         if (resetGate.Drop)
         {
+            // Reset consumes the ignored run's terminal to reload history. Keep
+            // fencing that run's chat frames, which can arrive after the terminal.
+            if (resetGate.ReloadHistory && !string.IsNullOrWhiteSpace(evt.RunId))
+                _lifecycle.RetireCancelledRun(evt.RunId);
             return new(
                 false,
                 resetGate.ReloadHistory,
                 null,
                 openedLifecycle);
+        }
+        // A retired run's terminal was already handled, and a replayed start for
+        // an aborted run must not replace the current run.
+        if (_lifecycle.IsRetiredCancelledRun(evt.RunId) ||
+            ChatEventMapper.IsLifecycleStart(evt) && _lifecycle.IsRunAborted(evt.RunId))
+        {
+            Logger.Debug($"[ChatProvider] Dropping cancelled-run agent event for threadId='{threadId}' stream='{evt.Stream}'");
+            return new(false, false, null, openedLifecycle);
         }
         if (ShouldDropTerminalAgentEventLocked(
                 evt,

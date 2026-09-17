@@ -3,12 +3,14 @@ using OpenClaw.Shared;
 namespace OpenClawTray.Chat;
 
 /// <summary>
-/// Owns active-run identity/sequences, abort suppression and deferral, and
-/// bounded terminal-run deduplication. The root serializes every operation.
+/// Owns active-run identity/sequences, abort suppression and deferral,
+/// bounded terminal-run deduplication, and bounded cancelled-run retirement.
+/// The root serializes every operation.
 /// </summary>
 internal sealed class ChatLifecycleState
 {
     private const int TerminalRunCapacity = 64;
+    private const int RetiredCancelledRunCapacity = 64;
 
     private readonly Dictionary<string, string> _activeRunIds = new();
     private readonly Dictionary<string, long> _activeRunStartSequences = new();
@@ -17,6 +19,10 @@ internal sealed class ChatLifecycleState
     private readonly HashSet<string> _abortedThreads = new();
     private readonly Dictionary<string, List<string>> _terminalRunIdsByThread =
         new();
+    // Aborted or reset-ignored runs whose terminal already arrived. Their late
+    // output must stay suppressed after the live abort/reset state is cleared.
+    private readonly HashSet<string> _retiredCancelledRunIds = new(StringComparer.Ordinal);
+    private readonly Queue<string> _retiredCancelledRunOrder = new();
 
     private long _lifecycleStartSequence;
 
@@ -84,6 +90,25 @@ internal sealed class ChatLifecycleState
     internal bool IsRunAborted(string? runId) =>
         !string.IsNullOrWhiteSpace(runId) && _abortedRunIds.Contains(runId);
 
+    internal bool IsRetiredCancelledRun(string? runId) =>
+        !string.IsNullOrWhiteSpace(runId) && _retiredCancelledRunIds.Contains(runId);
+
+    /// <summary>
+    /// True when a frame carries the run ID of a cancelled run, before or after
+    /// that run's terminal. Frames without a run ID cannot be correlated.
+    /// </summary>
+    internal bool IsCancelledRun(string? runId) =>
+        IsRunAborted(runId) || IsRetiredCancelledRun(runId);
+
+    internal void RetireCancelledRun(string runId)
+    {
+        if (string.IsNullOrWhiteSpace(runId) || !_retiredCancelledRunIds.Add(runId))
+            return;
+        _retiredCancelledRunOrder.Enqueue(runId);
+        if (_retiredCancelledRunOrder.Count > RetiredCancelledRunCapacity)
+            _retiredCancelledRunIds.Remove(_retiredCancelledRunOrder.Dequeue());
+    }
+
     internal bool HasPendingAbort(string threadId) =>
         _pendingAbortCounts.ContainsKey(threadId);
 
@@ -110,8 +135,8 @@ internal sealed class ChatLifecycleState
 
     internal void RemoveAbortedRun(string? runId)
     {
-        if (!string.IsNullOrEmpty(runId))
-            _abortedRunIds.Remove(runId);
+        if (!string.IsNullOrEmpty(runId) && _abortedRunIds.Remove(runId))
+            RetireCancelledRun(runId);
     }
 
     internal void ClearThreadSuppression(string threadId) =>

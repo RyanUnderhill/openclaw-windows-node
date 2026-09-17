@@ -502,6 +502,30 @@ The operator client is received through the `OperatorClientChanged` event. The a
 
 Inbound chat and agent timeline events must include the gateway's canonical `sessionKey`. The tray client must not synthesize a literal `main` key for keyless inbound events, because that can merge unrelated events into the wrong timeline. When a keyless chat or agent event arrives, the tray drops it and raises a one-shot diagnostic so the protocol issue is visible without exposing the dropped message contents.
 
+Live `chat` and `session.message` events also retain the payload's optional
+`runId`, separately from message identity. `ChatConversationState` asks
+`ChatLifecycleState.IsCancelledRun` before admitting assistant or tool chat
+output, so a run cancelled by Stop or by a session reset cannot replace output
+or end a newer turn. A cancelled run stays fenced after its terminal arrives:
+`ChatLifecycleState` retires it into a bounded set (64 run IDs, evicted by
+arrival order) so late chat finals and agent output still cannot reach the
+timeline, and a replayed lifecycle start for an aborted run cannot replace the
+current run. A rolled-back abort is not retired. Reset admission also checks
+the supplied run against ignored reset runs before using timestamp admission.
+Runs that completed normally are not fenced. Frames without a run ID retain
+legacy thread-level handling; they cannot be reliably correlated to an older
+run.
+
+Chat admission also controls notification delivery. The synchronous provider
+marks rejected `ChatMessageInfo` frames with `SuppressNotification()` before
+the gateway parser emits its separate notification event. That per-frame veto
+is monotonic and does not suppress delivery to other chat subscribers. It
+prevents rejected finals from reaching notification history, toasts or TTS
+without adding another run cache or moving notification ownership into `App`.
+Consumers that do not apply a veto retain the existing notification behavior,
+including consumers that throw before vetoing. Duplicate-frame dedupe is not
+run admission, so identified duplicate finals keep their notification.
+
 ## Startup wiring (App.xaml.cs)
 
 ```
