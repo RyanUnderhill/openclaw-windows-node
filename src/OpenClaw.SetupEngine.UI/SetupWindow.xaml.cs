@@ -33,7 +33,7 @@ public sealed partial class SetupWindow : Window
     private readonly TaskCompletionSource<bool> _cleanupCompleted =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isClosed;
-    private XamlRoot? _minimumSizeRoot;
+    private readonly SetupWindowSizingController _windowSizing;
     private bool _persistStartupPreferenceOnComplete = true;
     private bool _showStartupPreferenceOnComplete = true;
     private readonly bool _startupRegistrationAllowed;
@@ -103,9 +103,6 @@ public sealed partial class SetupWindow : Window
         RootFrame.Content is not ProgressPage { IsPipelineRunning: true } &&
         RootFrame.Content is not NativeGatewaySetupPage { IsBusy: true } &&
         RootFrame.Content is not WizardPage and not AiSetupPage and not AiReadyPage;
-    [DllImport("user32.dll")]
-    private static extern uint GetDpiForWindow(IntPtr hwnd);
-
     private void ApplyWindowIcon()
     {
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "openclaw.ico");
@@ -160,6 +157,7 @@ public sealed partial class SetupWindow : Window
         _persistChoices = persistChoices;
         _startAtLocalAiRecoveryReview = startAtLocalAiRecoveryReview;
         InitializeComponent();
+        _windowSizing = new(this, RootFrame);
         LoadingOverlay.Bind(_loadingProgress);
         ApplyWindowIcon();
         Active = this;
@@ -180,11 +178,6 @@ public sealed partial class SetupWindow : Window
             _isClosed = true;
             LoadingOverlay.Dispose();
             _loadingProgress.Dispose();
-            RootFrame.Loaded -= AttachMinimumSizeRoot;
-            AppWindow.Changed -= MinimumSizeWindowChanged;
-            if (_minimumSizeRoot is { } sizingRoot)
-                sizingRoot.Changed -= MinimumSizeRootChanged;
-            _minimumSizeRoot = null;
             _initialContentReady.TrySetResult(true);
             try
             {
@@ -251,15 +244,6 @@ public sealed partial class SetupWindow : Window
                 _cleanupCompleted.TrySetResult(true);
             }
         };
-
-        RootFrame.Loaded += AttachMinimumSizeRoot;
-        AppWindow.Changed += MinimumSizeWindowChanged;
-        ApplyMinimumWindowSize();
-
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        var dpi = GetDpiForWindow(hwnd);
-        var initialSize = SetupWindowSizing.InitialPixels(dpi);
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(initialSize.Width, initialSize.Height));
 
         // Extend into title bar for modern look
         ExtendsContentIntoTitleBar = true;
@@ -387,40 +371,6 @@ public sealed partial class SetupWindow : Window
     }
 
     public void NavigateToSecurityNotice(bool back = false) => NavigateTo(typeof(SecurityNoticePage), _config, back);
-
-    private void AttachMinimumSizeRoot(object sender, RoutedEventArgs args)
-    {
-        if (_isClosed) return;
-        var root = RootFrame.XamlRoot;
-        if (!ReferenceEquals(root, _minimumSizeRoot))
-        {
-            if (_minimumSizeRoot is { } previous)
-                previous.Changed -= MinimumSizeRootChanged;
-            _minimumSizeRoot = root;
-            if (root is not null)
-                root.Changed += MinimumSizeRootChanged;
-        }
-        ApplyMinimumWindowSize();
-    }
-
-    private void MinimumSizeRootChanged(XamlRoot sender, XamlRootChangedEventArgs args) => ApplyMinimumWindowSize();
-
-    private void MinimumSizeWindowChanged(AppWindow sender, AppWindowChangedEventArgs args)
-    {
-        if (args.DidPositionChange || args.DidPresenterChange)
-            ApplyMinimumWindowSize();
-    }
-
-    private void ApplyMinimumWindowSize()
-    {
-        if (_isClosed || AppWindow.Presenter is not OverlappedPresenter presenter) return;
-        var dpi = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        var minimum = SetupWindowSizing.MinimumPixels(dpi);
-        if (presenter.PreferredMinimumWidth != minimum.Width)
-            presenter.PreferredMinimumWidth = minimum.Width;
-        if (presenter.PreferredMinimumHeight != minimum.Height)
-            presenter.PreferredMinimumHeight = minimum.Height;
-    }
 
     public void NavigateToWelcome(bool back = false)
     {

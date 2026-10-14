@@ -91,7 +91,7 @@ public sealed class NativeCompletionPresentationTests
         var ready = Read(@"src\OpenClaw.SetupEngine.UI\SetupReadyWindow.cs");
         Assert.DoesNotContain("CompleteVerifiedAsync", ready);
         Assert.DoesNotContain("SaveSetupChoices", ready);
-        Assert.DoesNotContain("SetupWindow", ready);
+        Assert.DoesNotMatch(@"\bSetupWindow\b", ready);
         Assert.Contains("CommitPresentation()", ready);
         Assert.Contains("await loaded.Task.WaitAsync(ct)", ready);
         var page = Read(@"src\OpenClaw.SetupEngine.UI\Pages\AiReadyPage.xaml.cs");

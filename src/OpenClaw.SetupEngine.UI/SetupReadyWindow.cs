@@ -8,6 +8,7 @@ namespace OpenClaw.SetupEngine.UI;
 public sealed class SetupReadyWindow : Window
 {
     private readonly Frame _frame = new();
+    private readonly SetupWindowSizingController _windowSizing;
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Func<CancellationToken, Task<SetupVerifiedNativeRoute>> _verify;
     private readonly Func<SetupNativeCompletion, CancellationToken, Task> _navigate;
@@ -36,7 +37,7 @@ public sealed class SetupReadyWindow : Window
         _returnToConnection = returnToConnection;
         Content = _frame;
         Title = SetupLocalization.GetString("Onboarding_Finishing_Heading.Text");
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(760, 720));
+        _windowSizing = new(this, _frame);
         ShowPreparing(SetupLoadingStep.StartCompanion);
         Closed += async (_, _) =>
         {

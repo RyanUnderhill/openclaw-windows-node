@@ -417,10 +417,11 @@ supported and retains the classic OpenClaw onboard wizard for older gateways.
 
 ### Native presentation
 
-The shared Setup window starts at 720 x 820 DIPs and has a native presenter
+The Setup and post-restart Ready windows start at 720 x 820 DIPs and have a native presenter
 minimum of 720 x 560 DIPs. `SetupWindowSizing` rounds those dimensions up to
-physical pixels using the actual HWND DPI. `SetupWindow` reapplies the minimum
-when its XamlRoot, monitor position or presenter changes and detaches the
+physical pixels using the actual HWND DPI. Both windows compose
+`SetupWindowSizingController`, which reapplies the minimum
+when the XamlRoot, monitor position or presenter changes and detaches the
 subscriptions on close. DPI updates do not call Resize or reset the user's size.
 The window remains movable, resizable and maximizable; page content scrolls
 between its fixed header/footer at the minimum. This is a window constraint,

@@ -245,6 +245,7 @@ public sealed class NativeSharedFlowTests(UIThreadFixture ui, ITestOutputHelper 
             await WithPublishedReadyAsync(window, registry, server, Assert.Single(completed), theme,
                 async (readyWindow, ready, navigated, _) =>
                 {
+                    await SetupWindowMinimumSizeTests.ResizeBelowMinimumAsync(readyWindow, ui, output, $"native-ready-{theme}");
                     Assert.Null(ready.FindName("NativeSummary"));
                     ready.UpdateLayout();
                     await OnboardingNativeProof.NextCompositionAsync(TimeSpan.FromMilliseconds(400));
@@ -463,8 +464,15 @@ public sealed class NativeSharedFlowTests(UIThreadFixture ui, ITestOutputHelper 
     private static async Task NavigatePreparedAiAsync(SetupWindow window, NativeGatewaySetupSession native)
     {
         await using var preparation = await GatewayAiPreparation.PrepareNativeAsync(native, CancellationToken.None);
-        typeof(SetupWindow).GetMethod("NavigateToNativeAiSetup", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .Invoke(window, [native, preparation]);
+        var page = new NativeGatewaySetupPage();
+        Action<NativeAiPreparation> navigate = prepared =>
+            typeof(SetupWindow).GetMethod("NavigateToNativeAiSetup", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(window, [native, prepared]);
+        Func<CancellationToken, Task> authorize = native.AuthorizeAsync;
+        await Assert.IsAssignableFrom<Task>(
+            typeof(NativeGatewaySetupPage).GetMethod("CompleteAiPreparationAsync", BindingFlags.NonPublic | BindingFlags.Instance)!
+                .Invoke(page, [preparation, null, native.IsIsolated ? native.Record : null,
+                    authorize, native.LifetimeToken, navigate, CancellationToken.None]));
     }
 
     private async Task WithPublishedReadyAsync(SetupWindow setupWindow, GatewayRegistry registry,
@@ -495,7 +503,7 @@ public sealed class NativeSharedFlowTests(UIThreadFixture ui, ITestOutputHelper 
                     () => readyWindow!.DispatcherQueue.TryEnqueue(() => readyWindow.Invalidate())),
                 () => Assert.IsType<SetupReadyObservation>(observation).RequireCurrent(),
                 () => throw new InvalidOperationException("No Connection navigation expected.")));
-            readyWindow.AppWindow.Resize(setupWindow.AppWindow.Size);
+            SetupWindowMinimumSizeTests.AssertInitialWindowSize(readyWindow, output);
             readyWindow.Activate();
             readyWindow.AppWindow.Move(new(-32000, -32000));
             var readyFrame = Assert.IsType<Frame>(readyWindow.Content);

@@ -51,6 +51,7 @@ public sealed class AiReadyPageRenderingTests(UIThreadFixture ui, ITestOutputHel
                     ct => VerifySyntheticAsync(proof, ct),
                     (_, _) => throw new InvalidOperationException("Must not navigate"),
                     _ => new Observation(), () => { }, () => { }));
+                SetupWindowMinimumSizeTests.AssertInitialWindowSize(window, output);
                 var size = window.AppWindow.Size;
                 var frame = Assert.IsType<Frame>(window.Content);
                 using var navigation = OnboardingNativeProof.TrackNavigation(frame);
@@ -98,6 +99,13 @@ public sealed class AiReadyPageRenderingTests(UIThreadFixture ui, ITestOutputHel
                 Assert.False(Directory.Exists(Path.Combine(data, "setup-dashboard-handoff")));
                 Assert.False(File.Exists(Path.Combine(data, "settings.json")));
                 Assert.Equal(size, window.AppWindow.Size);
+                var minimum = await SetupWindowMinimumSizeTests.ResizeBelowMinimumAsync(window, ui, output, $"ready-{theme}");
+                await SetupWindowMinimumSizeTests.SaveViewportsAsync(window, page, ui, output, $"ready-minimum-{theme}");
+                window.AppWindow.Resize(new(minimum.Width + 120, minimum.Height + 120));
+                await ui.YieldToRenderAsync();
+                var resized = window.AppWindow.Size;
+                SetupWindowMinimumSizeTests.RefreshMinimumSize(window);
+                Assert.Equal(resized, window.AppWindow.Size);
                 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("OPENCLAW_UI_PROOF_DIR")))
                 {
                     using (await OnboardingNativeProof.CaptureAsync(window, $"followup-native-ready-{theme}", output,
@@ -123,6 +131,7 @@ public sealed class AiReadyPageRenderingTests(UIThreadFixture ui, ITestOutputHel
                 {
                     window.Close();
                     await window.CleanupCompleted;
+                    SetupWindowMinimumSizeTests.AssertSizingDetached(window);
                 }
                 Application.Current.Resources.MergedDictionaries.Remove(resources);
             }
