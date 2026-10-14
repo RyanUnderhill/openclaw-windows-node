@@ -150,10 +150,12 @@ public sealed class SetupReadinessTests
         var transport = new Transport();
         var owner = new Owner();
         await using var preparation = await GatewayAiPreparation.PrepareAsync(transport, owner, default);
+        Assert.Same(transport, preparation.Transport);
         var transferred = preparation.Take();
         Assert.Same(transport, transferred.Transport);
         Assert.NotNull(transferred.Client.Detection);
         Assert.Throws<SetupNativeOwnershipException>(() => preparation.Take());
+        Assert.Throws<SetupNativeOwnershipException>(() => preparation.Transport);
         await preparation.DisposeAsync();
         Assert.Equal(0, owner.Disposals);
         await transferred.Owner.DisposeAsync();
@@ -169,6 +171,7 @@ public sealed class SetupReadinessTests
         await using (var preparation = await GatewayAiPreparation.PrepareAsync(transport, owner, default))
         {
             transport.Generation++;
+            Assert.Throws<SetupNativeOwnershipException>(() => preparation.Transport);
             Assert.Throws<SetupNativeOwnershipException>(() => preparation.Take());
         }
         Assert.Equal(1, owner.Disposals);

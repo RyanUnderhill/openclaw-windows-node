@@ -21,7 +21,6 @@ public sealed partial class NativeGatewaySetupPage : Page
     private NativeGatewaySetupService? _setupService;
     private readonly List<SetupPhaseStatus> _rows = [];
     private int _currentStep;
-    private SetupLoadingProgress.Scope? _loading;
     internal bool IsBusy => _operation is { IsCompleted: false };
 
     public NativeGatewaySetupPage()
@@ -60,9 +59,6 @@ public sealed partial class NativeGatewaySetupPage : Page
 
     private async Task RunOperationAsync(CancellationToken cancellationToken)
     {
-        _loading = SetupWindow.Active?.BeginLoading(SetupLoadingGroup.GatewayPreparation, SetupLoadingStep.CheckGatewaySupport);
-        if (_loading is { } loading)
-            SetupWindow.Active?.SetLoadingCancellation(loading, () => _operationCts?.Cancel());
         foreach (var row in _rows)
             row.Apply(SetupInstallationStatus.Pending);
         _currentStep = 0;
@@ -144,7 +140,6 @@ public sealed partial class NativeGatewaySetupPage : Page
         }
         finally
         {
-            _loading?.Dispose();
             SetBusy(false);
         }
     }
@@ -169,12 +164,29 @@ public sealed partial class NativeGatewaySetupPage : Page
         using var logger = new SetupLogger(filePath: null);
         var appLogger = new SetupOpenClawLogger(logger);
         var registry = new GatewayRegistry(window.DataDir, logger: appLogger);
-        var loading = _loading;
+        void DispatchProgress(Action update)
+        {
+            void Apply()
+            {
+                if (IsLoaded && IsBusy && !cancellationToken.IsCancellationRequested &&
+                    _operationCts?.Token == cancellationToken)
+                    update();
+            }
+            if (DispatcherQueue.HasThreadAccess) Apply();
+            else if (!DispatcherQueue.TryEnqueue(Apply))
+                Trace.TraceWarning("The native setup progress update could not be dispatched.");
+        }
+        void ReportProgress(string message) => DispatchProgress(() => StatusText.Text = message);
+        void ReportStage(NativeGatewaySetupStage stage) => DispatchProgress(() =>
+        {
+            if (stage is NativeGatewaySetupStage.StartingGateway or NativeGatewaySetupStage.VerifyingEndpoint)
+                SetCurrentStep(3);
+        });
+        var progress = new Progress<SetupLoadingStep>(step => ReportProgress(SetupLoadingView.DetailFor(step)));
         var service = _setupService = new NativeGatewaySetupService(
             registry,
             _resolver,
-            new NativeGatewaySetupHost(stageProgress: stage => loading?.Report(
-                stage == NativeGatewaySetupStage.StartingGateway ? SetupLoadingStep.StartGateway : SetupLoadingStep.ConnectGateway)),
+            new NativeGatewaySetupHost(ReportProgress, ReportStage),
             () => NativeGatewayRuntimeRouter.Create(registry, _resolver, appLogger));
         window.NativeSetupDraft = await service.CreateDraftAsync(cancellationToken);
         StatusText.Text = SetupLocalization.GetString("Onboarding_Native_InProgress");
@@ -189,15 +201,20 @@ public sealed partial class NativeGatewaySetupPage : Page
         try
         {
             StatusText.Text = SetupLocalization.GetString("Onboarding_AiSetup_Preparing");
-            await using var preparation = await GatewayAiPreparation.PrepareNativeAsync(session, cancellationToken, loading);
+            await using var preparation = await GatewayAiPreparation.PrepareNativeAsync(session, cancellationToken, progress);
             cancellationToken.ThrowIfCancellationRequested();
             if (window.IsClosed)
             {
                 await session.DisposeAsync();
                 return;
             }
-            _rows[3].Apply(SetupInstallationStatus.Complete);
-            window.NavigateToNativeAiSetup(session, preparation);
+            await CompleteAiPreparationAsync(preparation, window.LocalAiHost,
+                session.IsIsolated ? session.Record : null, session.AuthorizeAsync, session.LifetimeToken,
+                prepared =>
+                {
+                    if (window.IsClosed) throw new OperationCanceledException(cancellationToken);
+                    window.NavigateToNativeAiSetup(session, prepared);
+                }, cancellationToken);
         }
         catch
         {
@@ -206,9 +223,21 @@ public sealed partial class NativeGatewaySetupPage : Page
         }
     }
 
+    internal async Task CompleteAiPreparationAsync(
+        GatewayAiPreparation gateway, ISetupLocalAiHost? host, GatewayRecord? isolatedRecord,
+        Func<CancellationToken, Task>? authorize, CancellationToken lifetimeToken,
+        Action<NativeAiPreparation> navigate, CancellationToken cancellationToken)
+    {
+        SetCurrentStep(3);
+        await using var preparation = await NativeAiPreparation.PrepareAsync(
+            gateway, host, isolatedRecord, authorize, lifetimeToken, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        _rows[3].Apply(SetupInstallationStatus.Complete);
+        navigate(preparation);
+    }
+
     private async Task InstallAsync(CancellationToken cancellationToken)
     {
-        _loading?.Report(SetupLoadingStep.InstallGatewayPackage);
         StatusText.Text = SetupLocalization.GetString("Onboarding_Native_InstallingPackage");
         using var logger = new SetupLogger(filePath: null);
         await _installer.InstallAsync(new CommandRunner(logger), cancellationToken);
@@ -216,13 +245,6 @@ public sealed partial class NativeGatewaySetupPage : Page
 
     private void SetCurrentStep(int index)
     {
-        _loading?.Report(index switch
-        {
-            0 => SetupLoadingStep.CheckGatewaySupport,
-            1 => SetupLoadingStep.CheckGatewayPackage,
-            2 => SetupLoadingStep.PrepareGateway,
-            _ => SetupLoadingStep.ConnectGateway
-        });
         for (var i = 0; i < index; i++)
             _rows[i].Apply(SetupInstallationStatus.Complete);
         _currentStep = index;

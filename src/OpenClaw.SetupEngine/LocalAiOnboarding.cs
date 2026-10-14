@@ -274,11 +274,14 @@ public sealed class LocalAiOnboardingObservation(ISetupLocalAiHost host) : IAsyn
     public Task RefreshAsync() => RefreshAsync(null);
 
     public Task RefreshAsync(IProgress<LocalAiSetupStage>? progress)
+        => RefreshAsync(progress, CancellationToken.None);
+
+    public Task RefreshAsync(IProgress<LocalAiSetupStage>? progress, CancellationToken cancellationToken)
     {
         ObjectDisposedException.ThrowIf(_closed, this);
         _request?.Cancel();
         _request?.Dispose();
-        _request = new();
+        _request = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var generation = ++_generation;
         Snapshot = new(LocalAiOnboardingState.Checking);
         Changed?.Invoke();

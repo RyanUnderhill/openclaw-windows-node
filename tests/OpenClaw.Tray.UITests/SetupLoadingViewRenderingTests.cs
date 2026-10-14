@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 using OpenClaw.SetupEngine;
 using OpenClaw.SetupEngine.UI.Controls;
 using OpenClaw.SetupEngine.UI;
@@ -16,6 +17,67 @@ namespace OpenClaw.Tray.UITests;
 [Collection(UICollection.Name)]
 public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
 {
+    [Fact]
+    public async Task NativeGatewayPreparationKeepsFourStepPageVisibleThroughStartup()
+    {
+        OnboardingNativeProof.AssertIsolatedRoots();
+        using var temp = new TempDirectory("native-step-progress-");
+        using var preview = new EnvironmentScope("OPENCLAW_SETUP_PREVIEW_PAGE", "native");
+        var configPath = temp.Combine("config.json");
+        File.WriteAllText(configPath, JsonSerializer.Serialize(new SetupConfig()));
+        await ui.RunOnUIAsync(async () =>
+        {
+            var resources = OnboardingWindowsFlowTests.LoadProgressResources(
+                Environment.GetEnvironmentVariable("OPENCLAW_REPO_ROOT")!);
+            Application.Current.Resources.MergedDictionaries.Add(resources);
+            SetupWindow? window = null;
+            try
+            {
+                window = OnboardingNativeProof.CreateWindow(() => new SetupWindow(configPath: configPath,
+                    dataDir: temp.Combine("data"), localDataDir: temp.Combine("local"), commandLineArgs: []));
+                window.Activate();
+                var root = Assert.IsType<Grid>(window.Content);
+                var frame = Assert.IsType<Frame>(root.FindName("RootFrame"));
+                var page = Assert.IsType<NativeGatewaySetupPage>(frame.Content);
+                var overlay = Assert.IsType<SetupLoadingView>(root.FindName("LoadingOverlay"));
+                var steps = Assert.IsType<StackPanel>(page.FindName("StepsPanel"));
+                await TestSupport.WaitForRenderedConditionAsync(() => steps.IsLoaded, "native Gateway steps mounted");
+                Assert.Equal(4, steps.Children.Count);
+                var advance = typeof(NativeGatewaySetupPage).GetMethod("SetCurrentStep",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!;
+                for (var step = 0; step < steps.Children.Count; step++)
+                {
+                    advance.Invoke(page, [step]);
+                    await ui.YieldToRenderAsync();
+                    Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+                    Assert.Same(page, frame.Content);
+                    for (var index = 0; index < steps.Children.Count; index++)
+                    {
+                        var card = Assert.IsType<SettingsCard>(steps.Children[index]);
+                        var status = Assert.IsType<SetupPhaseStatus>(card.Content);
+                        Assert.Equal(index == step,
+                            Assert.IsType<ProgressRing>(status.FindName("RunningIcon")).IsActive);
+                        Assert.Equal(index < step ? Visibility.Visible : Visibility.Collapsed,
+                            Assert.IsType<FontIcon>(status.FindName("CompleteIcon")).Visibility);
+                    }
+                }
+                var startup = Assert.IsType<SetupPhaseStatus>(
+                    Assert.IsType<SettingsCard>(steps.Children[3]).Content);
+                startup.Apply(SetupInstallationStatus.Failed);
+                Assert.Equal(Visibility.Visible,
+                    Assert.IsType<FontIcon>(startup.FindName("FailedIcon")).Visibility);
+                Assert.Equal(Visibility.Collapsed, overlay.Visibility);
+                Assert.Null(typeof(NativeGatewaySetupPage).GetField("_operation",
+                    BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(page));
+            }
+            finally
+            {
+                if (window is not null) { window.Close(); await window.CleanupCompleted; }
+                Application.Current.Resources.MergedDictionaries.Remove(resources);
+            }
+        });
+    }
+
     [Theory]
     [InlineData(ElementTheme.Light, 600, 380)]
     [InlineData(ElementTheme.Dark, 720, 820)]
@@ -77,7 +139,8 @@ public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
                     Assert.InRange(scroll.ScrollableWidth, 0, 0.5);
                     var progress = Assert.IsType<ProgressBar>(view.FindName("ActivityProgress"));
                     Assert.InRange(Math.Abs(progress.RenderSize.Width - Math.Min(320, scroll.ViewportWidth)), 0, 1);
-                    foreach (var name in new[] { "Mascot", "Title", "Detail", "ActivityProgress" })
+                    Assert.Null(view.FindName("Detail"));
+                    foreach (var name in new[] { "Mascot", "Title", "ActivityProgress" })
                     {
                         var element = Assert.IsAssignableFrom<FrameworkElement>(view.FindName(name));
                         // TextBlock.ActualWidth reports ink width; alignment uses its arranged render box.
@@ -234,7 +297,8 @@ public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
                 await ui.YieldToRenderAsync();
                 var view = Assert.IsType<SetupLoadingView>(old.Content);
                 Assert.Equal("Finishing setup", Assert.IsType<TextBlock>(view.FindName("Title")).Text);
-                Assert.Contains("old Local AI", Assert.IsType<TextBlock>(view.FindName("Detail")).Text);
+                Assert.Contains("old Local AI",
+                    AutomationProperties.GetName(Assert.IsType<ProgressBar>(view.FindName("ActivityProgress"))));
                 old.Close();
                 old = null;
                 replacement = OnboardingNativeProof.CreateWindow(() => new SetupReadyWindow(
@@ -289,6 +353,9 @@ public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
                 var title = Assert.IsType<TextBlock>(view.FindName("Title"));
                 Assert.Equal("Setting up Local AI", title.Text);
                 var progress = Assert.IsType<ProgressBar>(view.FindName("ActivityProgress"));
+                Assert.Null(view.FindName("Detail"));
+                Assert.Equal("Downloading selected model", AutomationProperties.GetName(progress));
+                Assert.Contains("model.gguf", Assert.IsType<TextBlock>(view.FindName("Measurement")).Text);
                 Assert.False(progress.IsIndeterminate);
                 Assert.Equal(0.5, progress.Value);
                 var original = ui.Container.Children.Single();
@@ -302,7 +369,7 @@ public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
                     Assert.Same(original, ui.Container.Children.Single());
                     Assert.Same(title, view.FindName("Title"));
                     Assert.Equal("Setting up Local AI", title.Text);
-                    Assert.DoesNotContain("late artifact", Assert.IsType<TextBlock>(view.FindName("Detail")).Text);
+                    Assert.DoesNotContain("late artifact", AutomationProperties.GetName(progress));
                     Assert.True(progress.IsIndeterminate);
                 }
                 using var finishing = source.Begin(SetupLoadingGroup.Finishing, SetupLoadingStep.SaveSettings);
@@ -343,10 +410,11 @@ public sealed class SetupLoadingViewRenderingTests(UIThreadFixture ui)
                 await ui.YieldToRenderAsync();
                 Assert.Equal("Finishing setup", Assert.IsType<TextBlock>(view.FindName("Title")).Text);
                 view.Dispose();
-                var detail = Assert.IsType<TextBlock>(view.FindName("Detail")).Text;
+                var progress = Assert.IsType<ProgressBar>(view.FindName("ActivityProgress"));
+                var detail = AutomationProperties.GetName(progress);
                 current.Report(SetupLoadingStep.VerifyModel);
                 await ui.YieldToRenderAsync();
-                Assert.Equal(detail, Assert.IsType<TextBlock>(view.FindName("Detail")).Text);
+                Assert.Equal(detail, AutomationProperties.GetName(progress));
             }
             finally
             {

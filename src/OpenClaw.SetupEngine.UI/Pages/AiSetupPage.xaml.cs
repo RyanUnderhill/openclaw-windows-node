@@ -24,7 +24,8 @@ public sealed record AiSetupPageArgs(
     NativeGatewaySetupSession? NativeSession = null, Func<Task>? CancelNativeSetup = null,
     GatewayConnectionManager? ConnectionManager = null, string? ExpectedEndpointBinding = null,
     LocalAiInstallAndUseIntent? InstallAndUse = null, GatewayAiPreparation? Preparation = null,
-    Action? CloseSetupWindow = null, SetupLoadingProgress? Loading = null);
+    Action? CloseSetupWindow = null, SetupLoadingProgress? Loading = null,
+    NativeAiPreparation? NativePreparation = null);
 
 public sealed partial class AiSetupPage : Page, IAsyncDisposable
 {
@@ -44,6 +45,8 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
     private GatewayConnectionManager? _observedManager;
     private bool _managerClientReplaced;
     private WizardConsoleTail? _nativeConsole;
+    private NativeSetupConsole? _isolatedConsole;
+    private bool _initialNativePrepared;
     private GatewayLogTailIssue? _nativeConsoleIssue;
     private readonly Queue<string> _nativeOutput = new();
     private bool _nativeRecoveryBusy;
@@ -159,11 +162,18 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
     {
         _args = e.Parameter as AiSetupPageArgs
             ?? throw new ArgumentException("AI setup requires window-scoped navigation arguments.");
-        _prepared = _args.Preparation?.Take();
-        _loading = _args.Loading?.Begin(
-            _args.InstallAndUse is not null || _args.ExpectedConfiguredModelRef is not null && _args.Config.LocalAi.Enabled
-                ? SetupLoadingGroup.LocalAi : SetupLoadingGroup.GatewayPreparation,
-            SetupLoadingStep.ConnectGateway);
+        if (_args.NativePreparation is { } nativePreparation)
+        {
+            var prepared = nativePreparation.Take();
+            _prepared = prepared.Gateway;
+            _localObservation = prepared.Observation;
+            _initialNativePrepared = true;
+            if (prepared.NativeConfigured)
+                _nativeLocalAiTransport = prepared.Gateway.Transport;
+            _isolatedConsole = prepared.Console;
+        }
+        else
+            _prepared = _args.Preparation?.Take();
         if (_args.InstallAndUse is not null)
             TitleText.Text = S("LocalInstalling");
         _providerDialog.NativeRecoveryRequested += NativeRecoveryRequested;
@@ -182,7 +192,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         if (_args.LocalAiHost is { } host && _args.ExpectedConfiguredModelRef is null)
         {
             _localUse = new(host);
-            _localObservation = new(host);
+            _localObservation ??= new(host);
             _localObservation.Changed += LocalObservationChanged;
         }
         AsyncEventHandlerGuard.Run(() => RunAsync(InitializeAsync), onError: ReportFailure);
@@ -208,6 +218,8 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         _loading?.Dispose();
         _nativeConsole?.Dispose();
         _nativeConsole = null;
+        _isolatedConsole?.Dispose();
+        _isolatedConsole = null;
         CancelProviderViewportRestore();
         _providerBackdrop = null;
         _deferredDetection = null;
@@ -289,13 +301,13 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
 
     private async Task InitializeAsync(CancellationToken ct)
     {
-        if (_loading?.IsCurrent != true)
-            _loading = _args?.Loading?.Begin(
-                _localExpectedModel is not null || _args.InstallAndUse is not null ||
-                    _args.ExpectedConfiguredModelRef is not null && _args.Config.LocalAi.Enabled
-                    ? SetupLoadingGroup.LocalAi : SetupLoadingGroup.GatewayPreparation,
-                SetupLoadingStep.ConnectGateway);
-        SetActivity(_localExpectedModel is null ? "Connecting" : "Reconnecting");
+        if (_loading?.IsCurrent != true &&
+            (_localExpectedModel is not null || _args?.InstallAndUse is not null ||
+                _args is { ExpectedConfiguredModelRef: not null, Config.LocalAi.Enabled: true }))
+            _loading = _args?.Loading?.Begin(SetupLoadingGroup.LocalAi, SetupLoadingStep.ConnectGateway);
+        var initialNativePrepared = _initialNativePrepared && _prepared is not null;
+        if (!initialNativePrepared)
+            SetActivity(_localExpectedModel is null ? "Connecting" : "Reconnecting");
         IGatewayAiSetupTransport transport;
         GatewayAiSetupClient? preparedClient = null;
         bool observationStarted = false;
@@ -374,7 +386,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         ct.ThrowIfCancellationRequested();
         ObjectDisposedException.ThrowIf(_closed, this);
         LocalAiOnboardingUse.RequireGateway(ExpectedGatewayId, transport.Route.GatewayId);
-        if (localAiRecord is not null && _args.LocalAiHost is INativeSetupLocalAiHost localAi)
+        if (!initialNativePrepared && localAiRecord is not null && _args.LocalAiHost is INativeSetupLocalAiHost localAi)
         {
             localAi.ConfigureNative(localAiRecord, transport, authorizeLocalAi!);
             _nativeLocalAiTransport = transport;
@@ -424,12 +436,14 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             await InitializeAsync(ct);
             return;
         }
-        if (_localObservation is not null && _localExpectedModel is null)
+        if (initialNativePrepared && _isolatedConsole is { } preparedConsole)
+            AttachIsolatedConsole(preparedConsole);
+        if (!initialNativePrepared && _localObservation is not null && _localExpectedModel is null)
         {
             if (!observationStarted)
                 AsyncEventHandlerGuard.Run(_localObservation.RefreshAsync, onError: ReportLocalObservationFailure);
         }
-        if (_args.NativeSession is { IsIsolated: true } isolated)
+        if (!initialNativePrepared && _args.NativeSession is { IsIsolated: true } isolated)
         {
             SetActivity("LocalProgress_Console");
             await StartIsolatedConsoleAsync(transport, isolated.LifetimeToken);
@@ -458,45 +472,40 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
 
     private async Task StartIsolatedConsoleAsync(IGatewayAiSetupTransport transport, CancellationToken ct)
     {
-        _nativeConsole?.Dispose();
-        _nativeOutput.Clear();
+        var console = new NativeSetupConsole();
+        AttachIsolatedConsole(console);
+        await console.StartAsync(transport, ct, _request.Token);
+    }
+
+    private void AttachIsolatedConsole(NativeSetupConsole console)
+    {
+        if (!ReferenceEquals(_isolatedConsole, console))
+            _isolatedConsole?.Dispose();
+        _isolatedConsole = console;
         _nativeConsoleIssue = null;
-        var tail = new WizardConsoleTail(logger: NullLogger.Instance,
-            gatewayLogTail: WizardConsoleTail.CreateGatewayLogReader(transport.RequestAsync));
-        _nativeConsole = tail;
-        void AppendMessage(string message) => DispatcherQueue.TryEnqueue(() =>
+        void Apply()
         {
-            if (_closed || !ReferenceEquals(_nativeConsole, tail)) return;
-            _nativeOutput.Enqueue(message);
-            while (_nativeOutput.Count > 40) _nativeOutput.Dequeue();
+            if (_closed || !ReferenceEquals(_isolatedConsole, console)) return;
+            var snapshot = console.Snapshot;
+            _nativeOutput.Clear();
+            foreach (var line in snapshot.Output) _nativeOutput.Enqueue(line);
+            if (snapshot.Issue is { } issue && issue != _nativeConsoleIssue)
+            {
+                _nativeConsoleIssue = issue;
+                var message = SetupLocalization.GetString(issue == GatewayLogTailIssue.Skipped
+                    ? "Onboarding_Wizard_GatewayConsoleGap" : "Onboarding_Wizard_GatewayConsoleUnavailable");
+                if (BackdropLocked) _providerError = message;
+                else
+                {
+                    ErrorBar.Message = message;
+                    ErrorBar.IsOpen = true;
+                }
+                Render();
+            }
             UpdateNativeRecovery();
-        });
-        void ReportIssue(GatewayLogTailIssue issue) => DispatcherQueue.TryEnqueue(() =>
-        {
-            if (_closed || !ReferenceEquals(_nativeConsole, tail) ||
-                _nativeConsoleIssue == GatewayLogTailIssue.Skipped) return;
-            _nativeConsoleIssue = issue;
-            var message = SetupLocalization.GetString(issue == GatewayLogTailIssue.Skipped
-                ? "Onboarding_Wizard_GatewayConsoleGap" : "Onboarding_Wizard_GatewayConsoleUnavailable");
-            if (BackdropLocked) _providerError = message;
-            else
-            {
-                ErrorBar.Message = message;
-                ErrorBar.IsOpen = true;
-            }
-            Render();
-        });
-        try { await tail.StartGatewayAsync(AppendMessage, ReportIssue, ct); }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested || _closed) { throw; }
-        catch (Exception error)
-        {
-            Trace.TraceWarning("Isolated setup console could not start ({0}).", error.GetType().Name);
-            if (ReferenceEquals(_nativeConsole, tail))
-            {
-                tail.Stop();
-                ReportIssue(GatewayLogTailIssue.Unavailable);
-            }
         }
+        console.Changed += () => DispatcherQueue.TryEnqueue(Apply);
+        Apply();
     }
 
     private async Task DetectAsync(CancellationToken ct)
@@ -1389,10 +1398,12 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             localAi.ReleaseNative(localTransport);
             _nativeLocalAiTransport = null;
         }
-        if (_args?.NativeSession?.IsIsolated == true)
+        if (_args?.NativeSession?.IsIsolated == true || _isolatedConsole is not null)
         {
             _nativeConsole?.Dispose();
             _nativeConsole = null;
+            _isolatedConsole?.Dispose();
+            _isolatedConsole = null;
         }
         var session = _session;
         var nativeConnection = _nativeConnection;

@@ -435,10 +435,11 @@ public sealed partial class SetupWindow : Window
     internal void NavigateToNativeGatewaySetup() => NavigateTo(typeof(NativeGatewaySetupPage), _config);
     internal void NavigateToNativeCapabilities() =>
         NavigateToCapabilities(back: true);
-    internal void NavigateToNativeAiSetup(NativeGatewaySetupSession session, GatewayAiPreparation? preparation = null)
+    internal ISetupLocalAiHost? LocalAiHost => _localAiHost;
+    internal void NavigateToNativeAiSetup(NativeGatewaySetupSession session, NativeAiPreparation preparation)
     {
         NativeSetupSession = session;
-        NavigateTo(typeof(AiSetupPage), CreateAiSetupArgs() with { Preparation = preparation });
+        NavigateTo(typeof(AiSetupPage), CreateAiSetupArgs() with { NativePreparation = preparation });
     }
 
     internal async Task CancelNativeAiSetupAsync()

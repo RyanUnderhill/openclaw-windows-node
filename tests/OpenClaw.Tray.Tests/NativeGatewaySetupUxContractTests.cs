@@ -68,6 +68,20 @@ public sealed class NativeGatewaySetupUxContractTests
     }
 
     [Fact]
+    public void GatewayPreparationNeverReopensSharedLoadingScreenFromAiPage()
+    {
+        var source = File.ReadAllText(Path.Combine(TestRepositoryPaths.GetRepositoryRoot(),
+            "src", "OpenClaw.SetupEngine.UI", "Pages", "AiSetupPage.xaml.cs"));
+        Assert.DoesNotContain("SetupLoadingGroup.GatewayPreparation", source);
+        var navigation = source[source.IndexOf("protected override void OnNavigatedTo", StringComparison.Ordinal)..
+            source.IndexOf("protected override void OnNavigatedFrom", StringComparison.Ordinal)];
+        Assert.Contains("_args.Preparation?.Take()", navigation);
+        Assert.DoesNotContain(".Loading?.Begin(", navigation);
+        Assert.Contains("SetupActivitySteps.Visibility = Visible(_activities.Count > 0", source);
+        Assert.Contains("SetupLoadingGroup.LocalAi", source);
+    }
+
+    [Fact]
     public void ConsoleFailureRecovery_IsIndependentOfWizardErrorAndSurvivesNormalStepClears()
     {
         // Retire when the WinUI wizard exposes a mounted log-failure interaction fixture.
@@ -191,14 +205,24 @@ public sealed class NativeGatewaySetupUxContractTests
         Assert.Contains("Onboarding_Native_InstallingPackage", source);
         Assert.Contains("Onboarding_Native_VerifyingPackage", source);
         Assert.DoesNotContain("Onboarding_Native_InstallerOpened", source);
-        Assert.Contains("NavigateToNativeAiSetup(session, preparation)", source);
+        Assert.Contains("NavigateToNativeAiSetup(session, prepared)", source);
         Assert.True(source.IndexOf("GatewayAiPreparation.PrepareNativeAsync", StringComparison.Ordinal) <
-            source.IndexOf("NavigateToNativeAiSetup(session, preparation)", StringComparison.Ordinal));
+            source.IndexOf("NavigateToNativeAiSetup(session, prepared)", StringComparison.Ordinal));
         Assert.DoesNotContain("NavigateToNativeWizard", source);
-        Assert.Contains("new NativeGatewaySetupHost(stageProgress: stage => loading?.Report(", source);
-        Assert.DoesNotContain("void ReportProgress(string message)", source);
-        Assert.DoesNotContain("progressDispatcher.TryEnqueue", source);
-        Assert.Contains("GatewayAiPreparation.PrepareNativeAsync(session, cancellationToken, loading)", source);
+        Assert.Contains("new NativeGatewaySetupHost(ReportProgress, ReportStage)", source);
+        Assert.Contains("void ReportProgress(string message)", source);
+        Assert.Contains("SetupLoadingView.DetailFor(step)", source);
+        Assert.Contains("GatewayAiPreparation.PrepareNativeAsync(session, cancellationToken, progress)", source);
+        Assert.DoesNotContain("BeginLoading(", source);
+        Assert.DoesNotContain("SetLoadingCancellation(", source);
+        Assert.Contains("IsLoaded && IsBusy && !cancellationToken.IsCancellationRequested", source);
+        Assert.Contains("_operationCts?.Token == cancellationToken", source);
+        Assert.Contains("if (DispatcherQueue.HasThreadAccess) Apply();", source);
+        Assert.Contains("DispatcherQueue.TryEnqueue(Apply)", source);
+        var stages = source[source.IndexOf("void ReportStage(", StringComparison.Ordinal)..
+            source.IndexOf("var progress =", StringComparison.Ordinal)];
+        Assert.Contains("NativeGatewaySetupStage.StartingGateway or NativeGatewaySetupStage.VerifyingEndpoint", stages);
+        Assert.Contains("SetCurrentStep(3)", stages);
         Assert.Contains("Unloaded += (_, _) => _operationCts?.Cancel()", source);
         Assert.True(source.IndexOf("if (SetupPreview.IsActive)", StringComparison.Ordinal) <
                     source.IndexOf("_operation = RunOperationAsync", StringComparison.Ordinal));
@@ -425,7 +449,9 @@ public sealed class NativeGatewaySetupUxContractTests
         Assert.Contains("WizardConsoleTail.CreateGatewayLogReader(", wizard);
         var focused = File.ReadAllText(Path.Combine(root, "src", "OpenClaw.SetupEngine.UI", "Pages", "AiSetupPage.xaml.cs"));
         Assert.Contains("NativeSession is { IsIsolated: false }", focused);
-        Assert.Contains("WizardConsoleTail.CreateGatewayLogReader(transport.RequestAsync)", focused);
+        var preparation = File.ReadAllText(Path.Combine(root, "src", "OpenClaw.SetupEngine.UI", "NativeAiPreparation.cs"));
+        Assert.Contains("WizardConsoleTail.CreateGatewayLogReader(transport.RequestAsync)", preparation);
+        Assert.Contains("AttachIsolatedConsole(preparedConsole)", focused);
         Assert.Contains("Onboarding_Wizard_GatewayConsoleGap", focused);
         Assert.Contains("Onboarding_Wizard_GatewayConsoleUnavailable", focused);
         Assert.DoesNotContain("onboard", host);

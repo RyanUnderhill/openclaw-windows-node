@@ -1676,6 +1676,331 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
             reviewLocalAi: _ => { reviews++; return Task.CompletedTask; }, prepareDiscovery: true);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GatewayPreparationAndRefreshNeverOpenSharedLoadingScreen(bool prepared)
+    {
+        using var loading = new SetupLoadingProgress();
+        var loadingUpdates = 0;
+        loading.Changed += () => loadingUpdates++;
+        PageTransport? configured = null;
+        await WithPageAsync(async (page, transport, completed) =>
+        {
+            Assert.Null(loading.Current);
+            Assert.Equal(0, loadingUpdates);
+            if (!prepared)
+            {
+                var steps = Find<ItemsControl>(page, "SetupActivitySteps");
+                Assert.Equal(Visibility.Visible, steps.Visibility);
+                Assert.NotEmpty(steps.Items);
+                transport.ReleaseDetection();
+            }
+            await WaitAsync(() => Find<Button>(page, "RefreshButton").IsEnabled);
+            Assert.Equal(Visibility.Visible, Find<StackPanel>(page, "ChoicePanel").Visibility);
+            Assert.Equal(["openclaw.setup.detect"], transport.MethodCalls);
+            Invoke(Find<Button>(page, "RefreshButton"));
+            await WaitAsync(() => Find<Button>(page, "RefreshButton").IsEnabled);
+            Assert.Equal(2, transport.MethodCalls.Count(method => method == "openclaw.setup.detect"));
+            Assert.Null(loading.Current);
+            Assert.Equal(0, loadingUpdates);
+            Assert.Equal(0, completed());
+        }, configure: transport =>
+        {
+            configured = transport;
+            transport.HoldDetection = !prepared;
+        }, ready: () => configured?.MethodCalls.Contains("openclaw.setup.detect") == true,
+            prepareDiscovery: prepared, loading: loading);
+    }
+
+    [Theory]
+    [InlineData("healthy")]
+    [InlineData("console-failed")]
+    [InlineData("discovery-failed")]
+    [InlineData("observation-failed")]
+    public async Task NativeInitialPreparationWaitsForConsoleAndLocalReadThenTransfersWithoutRepeating(string outcome)
+    {
+        await WithNativePreparationPageAsync(async (frame, native, transport, host, owner) =>
+        {
+            transport.FailDetection = outcome == "discovery-failed";
+            transport.FailConsole = outcome == "console-failed";
+            host.FailObservation = outcome == "observation-failed";
+            using var cancellation = new CancellationTokenSource();
+            typeof(NativeGatewaySetupPage).GetField("_operationCts", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(native, cancellation);
+            await using var gateway = await GatewayAiPreparation.PrepareAsync(transport, owner, cancellation.Token);
+            var data = Environment.GetEnvironmentVariable("OPENCLAW_TRAY_DATA_DIR")!;
+            var transitions = 0;
+            AiSetupPage? ai = null;
+            var pending = CompleteNativePreparationAsync(native, gateway, host,
+                new() { Id = "ui-proof" }, _ => Task.CompletedTask, CancellationToken.None,
+                preparation =>
+                {
+                    transitions++;
+                    frame.Navigate(typeof(AiSetupPage), new AiSetupPageArgs(new(), data, data,
+                        () => false, () => throw new InvalidOperationException("Readiness is not AI verification."),
+                        LocalAiHost: host, ReviewLocalAi: _ => Task.CompletedTask,
+                        ExpectedGatewayId: "ui-proof", NativePreparation: preparation));
+                    ai = Assert.IsType<AiSetupPage>(frame.Content);
+                    Assert.Throws<SetupNativeOwnershipException>(() => TakeNativePreparation(preparation));
+                }, cancellation.Token);
+            try
+            {
+                await WaitAsync(() => transport.ConsoleAnchors == 1);
+                Assert.Same(native, frame.Content);
+                Assert.False(pending.IsCompleted);
+                Assert.Equal(0, host.Observations);
+                Assert.Equal(0, transitions);
+                AssertNativeStartupRunning(native);
+                transport.ReleaseConsole();
+                await WaitAsync(() => host.Observations == 1);
+                Assert.Same(native, frame.Content);
+                Assert.False(pending.IsCompleted);
+                AssertNativeStartupRunning(native);
+                Assert.Same(transport, host.NativeTransport);
+                Assert.Equal(0, host.Actions);
+                if (outcome == "healthy")
+                    await OnboardingArtworkRenderingTests.SaveProofAsync(native, "native-initial-readiness-pending", output);
+                if (!transport.FailConsole)
+                {
+                    for (var index = 0; index < 45; index++) transport.ConsoleMessages.Enqueue($"before-{index}");
+                    await WaitAsync(() => transport.ConsoleMessages.Count == 0);
+                }
+                host.ReleaseObservation();
+                await pending;
+                Assert.NotNull(ai);
+                await WaitAsync(() => Find<Button>(ai, "RefreshButton").IsEnabled);
+                Assert.Equal(1, transitions);
+                Assert.Equal(1, transport.ConsoleAnchors);
+                Assert.Equal(1, host.Observations);
+                Assert.Equal(1, host.NativeConfigurations);
+                Assert.Equal(0, owner.Disposals);
+                Assert.Equal(Visibility.Collapsed, Find<ItemsControl>(ai, "SetupActivitySteps").Visibility);
+                Assert.Empty(Find<ItemsControl>(ai, "SetupActivitySteps").Items);
+                Assert.Equal(Visibility.Collapsed, Find<ProgressBar>(ai, "BusyProgress").Visibility);
+                Assert.DoesNotContain("Checking this PC", Find<TextBlock>(ai, "LocalAiDescription").Text);
+                if (outcome == "healthy")
+                    await OnboardingArtworkRenderingTests.SaveProofAsync(ai, "native-ai-choices-prepared", output);
+                Assert.Single(transport.MethodCalls, method => method == "openclaw.setup.detect");
+                Assert.DoesNotContain(transport.MethodCalls, method => method.Contains("activate") || method.StartsWith("wizard."));
+                if (transport.FailConsole || transport.FailDetection)
+                    Assert.True(Find<InfoBar>(ai, "ErrorBar").IsOpen);
+                if (!transport.FailConsole)
+                {
+                    var buffer = (Queue<string>)typeof(AiSetupPage).GetField("_nativeOutput",
+                        BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(ai)!;
+                    Assert.Equal(40, buffer.Count);
+                    Assert.Equal("before-5", buffer.Peek());
+                    cancellation.Cancel(); // Departing preparation must not stop the transferred tail.
+                    transport.ConsoleMessages.Enqueue("after-transfer");
+                    await WaitAsync(() => buffer.Last() == "after-transfer");
+                }
+                host.HoldObservation = false;
+                Invoke(Find<Button>(ai, "RefreshButton"));
+                await WaitAsync(() => Find<Button>(ai, "RefreshButton").IsEnabled &&
+                    transport.MethodCalls.Count(method => method == "openclaw.setup.detect") == 2);
+                Assert.Equal(1, host.Observations);
+                if (host.FailObservation)
+                {
+                    host.FailObservation = false;
+                    await InvokeLocalAiAsync(ai);
+                    Assert.Equal(2, host.Observations);
+                }
+                Assert.Equal(1, transport.ConsoleAnchors);
+                Assert.Equal(0, host.Actions);
+                await ai.CloseAsync();
+                Assert.Equal(1, owner.Disposals);
+                Assert.Equal(1, host.NativeReleases);
+                var calls = transport.MethodCalls.Count;
+                transport.ConsoleMessages.Enqueue("after-close");
+                await Task.Delay(600);
+                Assert.Equal(calls, transport.MethodCalls.Count);
+            }
+            finally
+            {
+                cancellation.Cancel();
+                transport.ReleaseConsole();
+                host.ReleaseObservation();
+                if (ai is not null) await ai.CloseAsync();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("console")]
+    [InlineData("observation")]
+    public async Task NativeInitialPreparationCancellationCannotNavigateOrPublishLateReads(string paused)
+    {
+        await WithNativePreparationPageAsync(async (frame, native, transport, host, owner) =>
+        {
+            using var cancellation = new CancellationTokenSource();
+            await using var gateway = await GatewayAiPreparation.PrepareAsync(transport, owner, cancellation.Token);
+            var transitions = 0;
+            var pending = CompleteNativePreparationAsync(native, gateway, host, new() { Id = "ui-proof" },
+                _ => Task.CompletedTask, CancellationToken.None, _ => transitions++, cancellation.Token);
+            await WaitAsync(() => transport.ConsoleAnchors == 1);
+            if (paused == "observation")
+            {
+                transport.ReleaseConsole();
+                await WaitAsync(() => host.Observations == 1);
+            }
+            cancellation.Cancel();
+            transport.ReleaseConsole();
+            host.ReleaseObservation();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+            Assert.Same(native, frame.Content);
+            Assert.Equal(0, transitions);
+            Assert.Equal(1, owner.Disposals);
+            Assert.Equal(1, host.NativeReleases);
+            Assert.Equal(0, host.Actions);
+            var calls = transport.MethodCalls.Count;
+            await Task.Delay(600);
+            Assert.Equal(calls, transport.MethodCalls.Count);
+            await gateway.DisposeAsync();
+            Assert.Equal(1, owner.Disposals);
+        });
+    }
+
+    [Theory]
+    [InlineData("generation")]
+    [InlineData("route")]
+    [InlineData("scope")]
+    [InlineData("disconnect")]
+    public async Task NativeInitialPreparationRejectsAuthorityDriftBeforeNavigation(string drift)
+    {
+        await WithNativePreparationPageAsync(async (frame, native, transport, host, owner) =>
+        {
+            await using var gateway = await GatewayAiPreparation.PrepareAsync(transport, owner, CancellationToken.None);
+            var transitions = 0;
+            var pending = CompleteNativePreparationAsync(native, gateway, host, new() { Id = "ui-proof" },
+                _ => Task.CompletedTask, CancellationToken.None, _ => transitions++, CancellationToken.None);
+            transport.ReleaseConsole();
+            await WaitAsync(() => host.Observations == 1);
+            switch (drift)
+            {
+                case "generation": transport.Generation++; break;
+                case "route": transport.Route = transport.Route with { GatewayId = "replacement" }; break;
+                case "scope": transport.OperatorScopes = []; break;
+                default: transport.IsConnected = false; break;
+            }
+            host.ReleaseObservation();
+            await Assert.ThrowsAsync<SetupNativeOwnershipException>(() => pending);
+            Assert.Same(native, frame.Content);
+            Assert.Equal(0, transitions);
+            Assert.Equal(1, owner.Disposals);
+            Assert.Equal(1, host.NativeReleases);
+            Assert.Equal(0, host.Actions);
+        });
+    }
+
+    [Theory]
+    [InlineData("not-taken")]
+    [InlineData("navigation-failed")]
+    [InlineData("cancelled-at-transfer")]
+    [InlineData("stale-at-transfer")]
+    public async Task NativeInitialPreparationAbandonedHandoffDisposesOriginalOwners(string outcome)
+    {
+        await WithNativePreparationPageAsync(async (frame, native, transport, host, owner) =>
+        {
+            using var cancellation = new CancellationTokenSource();
+            await using var gateway = await GatewayAiPreparation.PrepareAsync(transport, owner, cancellation.Token);
+            transport.ReleaseConsole();
+            host.ReleaseObservation();
+            var pending = CompleteNativePreparationAsync(native, gateway, host, new() { Id = "ui-proof" },
+                _ => Task.CompletedTask, CancellationToken.None, preparation =>
+                {
+                    switch (outcome)
+                    {
+                        case "navigation-failed": throw new IOException("Synthetic navigation failure.");
+                        case "cancelled-at-transfer":
+                            cancellation.Cancel();
+                            TakeNativePreparation(preparation);
+                            break;
+                        case "stale-at-transfer":
+                            transport.Generation++;
+                            TakeNativePreparation(preparation);
+                            break;
+                    }
+                }, cancellation.Token);
+            if (outcome == "navigation-failed") await Assert.ThrowsAsync<IOException>(() => pending);
+            else if (outcome == "cancelled-at-transfer") await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending);
+            else if (outcome == "stale-at-transfer") await Assert.ThrowsAsync<SetupNativeOwnershipException>(() => pending);
+            else await pending;
+            Assert.Same(native, frame.Content);
+            Assert.Equal(1, owner.Disposals);
+            Assert.Equal(1, host.NativeReleases);
+            Assert.Equal(0, host.Actions);
+            await gateway.DisposeAsync();
+            Assert.Equal(1, owner.Disposals);
+        });
+    }
+
+    private static Task CompleteNativePreparationAsync(NativeGatewaySetupPage page,
+        GatewayAiPreparation gateway, ISetupLocalAiHost? host, OpenClaw.Connection.GatewayRecord? isolatedRecord,
+        Func<CancellationToken, Task>? authorize, CancellationToken lifetimeToken,
+        Action<NativeAiPreparation> navigate, CancellationToken cancellationToken) =>
+        (Task)typeof(NativeGatewaySetupPage).GetMethod("CompleteAiPreparationAsync",
+            BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(page,
+                [gateway, host, isolatedRecord, authorize, lifetimeToken, navigate, cancellationToken])!;
+
+    private static void TakeNativePreparation(NativeAiPreparation preparation)
+    {
+        try
+        {
+            typeof(NativeAiPreparation).GetMethod("Take", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .Invoke(preparation, null);
+        }
+        catch (TargetInvocationException error) when (error.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(error.InnerException).Throw();
+        }
+    }
+
+    private static void AssertNativeStartupRunning(NativeGatewaySetupPage page)
+    {
+        var steps = Find<StackPanel>(page, "StepsPanel");
+        Assert.Equal(4, steps.Children.Count);
+        var status = Assert.IsType<SetupPhaseStatus>(Assert.IsType<SettingsCard>(steps.Children[3]).Content);
+        Assert.True(Find<ProgressRing>(status, "RunningIcon").IsActive);
+        Assert.Equal(Visibility.Collapsed, Find<FontIcon>(status, "CompleteIcon").Visibility);
+    }
+
+    private async Task WithNativePreparationPageAsync(
+        Func<Frame, NativeGatewaySetupPage, PageTransport, PageLocalAiHost, PreparedPageOwner, Task> assertion)
+    {
+        OnboardingNativeProof.AssertIsolatedRoots();
+        using var preview = new EnvironmentScope("OPENCLAW_SETUP_PREVIEW_PAGE", "native");
+        await ui.ResetContainerAsync();
+        await ui.RunOnUIAsync(async () =>
+        {
+            var resources = OnboardingWindowsFlowTests.LoadProgressResources(
+                Environment.GetEnvironmentVariable("OPENCLAW_REPO_ROOT")!);
+            Application.Current.Resources.MergedDictionaries.Add(resources);
+            var frame = new Frame { Width = 720, Height = 820 };
+            using var navigation = OnboardingNativeProof.TrackNavigation(frame);
+            var transport = new PageTransport(true) { HoldConsole = true };
+            var host = new PageLocalAiHost(LocalAiOnboardingState.SetUp) { HoldObservation = true };
+            var owner = new PreparedPageOwner();
+            try
+            {
+                ui.Container.Children.Add(frame);
+                frame.Navigate(typeof(NativeGatewaySetupPage));
+                var page = Assert.IsType<NativeGatewaySetupPage>(frame.Content);
+                await WaitAsync(() => page.IsLoaded);
+                await assertion(frame, page, transport, host, owner);
+            }
+            finally
+            {
+                transport.ReleaseConsole();
+                host.ReleaseObservation();
+                if (frame.Content is AiSetupPage ai) await ai.CloseAsync();
+                frame.Navigate(typeof(Page));
+                ui.Container.Children.Clear();
+                Application.Current.Resources.MergedDictionaries.Remove(resources);
+            }
+        });
+    }
+
     [Fact]
     public async Task SameGenerationRecoveryRestoresProviderChoicesWithoutRediscoveryOrMutation()
     {
@@ -1736,10 +2061,27 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
     {
         public int Actions { get; private set; }
         public int Observations { get; private set; }
-        public bool HasNativeSelection => false;
+        public bool HasNativeSelection => NativeTransport is not null;
+        public IGatewayAiSetupTransport? NativeTransport { get; private set; }
+        public int NativeConfigurations { get; private set; }
+        public int NativeReleases { get; private set; }
+        public bool HoldObservation { get; set; }
+        public bool FailObservation { get; set; }
+        private readonly TaskCompletionSource _observationRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void ReleaseObservation() => _observationRelease.TrySetResult();
         public void ConfigureNative(OpenClaw.Connection.GatewayRecord record, IGatewayAiSetupTransport transport,
-            Func<CancellationToken, Task> authorize) => throw new InvalidOperationException();
-        public void ReleaseNative(IGatewayAiSetupTransport transport) => throw new InvalidOperationException();
+            Func<CancellationToken, Task> authorize)
+        {
+            Assert.Equal(record.Id, transport.Route.GatewayId);
+            NativeConfigurations++;
+            NativeTransport = transport;
+        }
+        public void ReleaseNative(IGatewayAiSetupTransport transport)
+        {
+            Assert.Same(NativeTransport, transport);
+            NativeReleases++;
+            NativeTransport = null;
+        }
         public Task ReconcileNativeAsync(IGatewayAiSetupTransport transport, string modelRef, CancellationToken ct) =>
             throw new InvalidOperationException();
         public Task WithdrawNativeAsync(CancellationToken ct) => throw new InvalidOperationException();
@@ -1757,16 +2099,18 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
         public bool FreshUnsupported { get; init; }
         public OpenClaw.Connection.GatewayRegistrySnapshot BeginGatewaySetup() => throw new InvalidOperationException();
         public Task ReconcileGatewaySetupAsync(OpenClaw.Connection.GatewayRegistrySnapshot expectedOutput, string? completedGatewayId) => throw new InvalidOperationException();
-        public Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct)
+        public async Task<LocalAiOnboardingSnapshot> ObserveAsync(CancellationToken ct)
         {
             Observations++;
-            return Task.FromResult(
+            if (HoldObservation) await _observationRelease.Task; // Deliberately late, uncooperative read.
+            if (FailObservation) throw new IOException("Synthetic readiness failure.");
+            return
             FreshUnsupported
                 ? LocalAiOnboardingSnapshot.Project(new("ui-proof", "Managed", 18789, null, null),
                     LocalInferenceEligibility.Evaluate(OnboardingSetupGalleryData.Hardware("unsupported")),
                     null, false, false, null)
                 : new LocalAiOnboardingSnapshot(state, new("ui-proof", "Managed", 18789, "test", 18803),
-                    ModelRef, "receipt", "Synthetic GPU", "Synthetic model", HasInstallationEvidence: true));
+                    ModelRef, "receipt", "Synthetic GPU", "Synthetic model", HasInstallationEvidence: true);
         }
         public Task<SetupLocalAiTarget> RevalidateReviewAsync(LocalAiOnboardingSnapshot selected, CancellationToken ct) =>
             Task.FromResult(selected.Target!);
@@ -1797,7 +2141,7 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
         string? expectedGatewayId = null, bool nativeProof = false, ElementTheme theme = ElementTheme.Light,
         double width = 720, LocalAiInstallAndUseIntent? installAndUse = null, Func<bool>? ready = null,
         Action<GatewayAiSetupCompletion>? completedProof = null, Action? closeSetupWindow = null,
-        bool prepareDiscovery = false)
+        bool prepareDiscovery = false, SetupLoadingProgress? loading = null)
     {
         await ui.ResetContainerAsync();
         await ui.RunOnUIAsync(async () =>
@@ -1846,6 +2190,7 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
                     LocalAiHost: localAiHost, ReviewLocalAi: reviewLocalAi, ExpectedGatewayId: expectedGatewayId,
                     InstallAndUse: installAndUse,
                     Preparation: preparation,
+                    Loading: loading,
                     CloseSetupWindow: closeSetupWindow,
                     CompleteVerifiedSetup: completedProof is null ? null : proof =>
                     {
@@ -1918,7 +2263,7 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
         }
     }
 
-    private static T Find<T>(AiSetupPage page, string name) where T : FrameworkElement =>
+    private static T Find<T>(FrameworkElement page, string name) where T : FrameworkElement =>
         Assert.IsType<T>(page.FindName(name));
 
     private static ProviderSetupDialog GetDialog(AiSetupPage page) =>
@@ -1964,9 +2309,9 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
 
     private sealed class PageTransport(bool focusedSupported) : IGatewayAiSetupTransport
     {
-        public GatewayAiSetupRoute Route { get; init; } = new("ui-proof", "main", "ui-proof-authority",
+        public GatewayAiSetupRoute Route { get; set; } = new("ui-proof", "main", "ui-proof-authority",
             EndpointBinding: new string('A', 64), IdentityBinding: new string('B', 64), SessionKey: "agent:main:main");
-        public long Generation => 1;
+        public long Generation { get; set; } = 1;
         public bool IsConnected { get; set; } = true;
         public IReadOnlyCollection<string> OperatorScopes { get; set; } = ["operator.admin"];
         public IReadOnlyCollection<string> Methods => focusedSupported
@@ -1985,6 +2330,33 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
         public bool RequireCatalogConsent { get; set; }
         public bool EmptyCandidates { get; set; }
         public bool FailDetection { get; set; }
+        public bool HoldDetection { get; set; }
+        public bool HoldConsole { get; set; }
+        public bool FailConsole { get; set; }
+        public int ConsoleAnchors { get; private set; }
+        public Queue<string> ConsoleMessages { get; } = new();
+        private readonly TaskCompletionSource _consoleRelease = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void ReleaseConsole() => _consoleRelease.TrySetResult();
+        private long _consoleCursor;
+
+        private async Task<JsonElement> ReadConsoleAsync(object parameters, CancellationToken ct)
+        {
+            var args = JsonSerializer.SerializeToElement(parameters);
+            var anchor = !args.TryGetProperty("cursor", out _);
+            if (anchor)
+            {
+                ConsoleAnchors++;
+                if (HoldConsole) await _consoleRelease.Task.WaitAsync(ct);
+            }
+            if (FailConsole) throw new InvalidDataException("Synthetic console failure.");
+            var lines = new List<string>();
+            while (!anchor && ConsoleMessages.TryDequeue(out var message))
+                lines.Add(JsonSerializer.Serialize(new { message,
+                    _meta = new { name = "openclaw", path = new { method = "console.log" } } }));
+            _consoleCursor += lines.Count;
+            return JsonSerializer.SerializeToElement(new
+                { file = "synthetic.log", cursor = _consoleCursor, size = _consoleCursor, lines });
+        }
         public bool IncludeMoreProvider { get; set; }
         public bool IncludeAdditionalCandidate { get; set; }
         public bool IncludeDensityChoices { get; set; }
@@ -1997,6 +2369,17 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _answerRelease =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _detectionRelease =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void ReleaseDetection() => _detectionRelease.TrySetResult();
+
+        private async Task<JsonElement> DetectionAsync(JsonElement response, CancellationToken ct)
+        {
+            if (HoldDetection)
+                await _detectionRelease.Task.WaitAsync(ct);
+            return response;
+        }
 
         public void ReleaseAnswer(bool fail)
         {
@@ -2031,11 +2414,12 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
         {
             cancellationToken.ThrowIfCancellationRequested();
             MethodCalls.Add(method);
+            if (method == "logs.tail") return ReadConsoleAsync(parameters, cancellationToken);
             if (method == "openclaw.setup.detect")
             {
                 if (FailDetection)
                     throw new IOException("Synthetic discovery failure.");
-                return Task.FromResult(JsonSerializer.SerializeToElement(new
+                return DetectionAsync(JsonSerializer.SerializeToElement(new
                 {
                     candidates = new[] { new { kind = "existing-model", label = "Existing AI",
                         detail = "Configured gateway connection", modelRef = "openai/test-model",
@@ -2056,7 +2440,7 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
                     configuredModel = "openai/test-model",
                     setupComplete = true,
                     nativeSessionCatalogPreferenceRequired = RequireCatalogConsent,
-                }));
+                }), cancellationToken);
             }
             if (method == "openclaw.setup.activate.start")
             {

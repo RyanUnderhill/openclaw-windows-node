@@ -10,9 +10,8 @@
                     <controls:OnboardingMascot x:Name="Mascot" Mood="Thinking" HorizontalAlignment="Center" />
                     <TextBlock x:Name="Title" Style="{StaticResource TitleTextBlockStyle}"
                                TextAlignment="Center" TextWrapping="Wrap" />
-                    <TextBlock x:Name="Detail" Style="{StaticResource BodyTextBlockStyle}"
-                               TextAlignment="Center" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite" />
-                    <ProgressBar x:Name="ActivityProgress" IsIndeterminate="True" MaxWidth="320" HorizontalAlignment="Stretch" />
+                    <ProgressBar x:Name="ActivityProgress" IsIndeterminate="True" MaxWidth="320" HorizontalAlignment="Stretch"
+                                 AutomationProperties.LiveSetting="Polite" />
                     <TextBlock x:Name="Measurement" Style="{StaticResource CaptionTextBlockStyle}"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                TextAlignment="Center" TextWrapping="Wrap" />

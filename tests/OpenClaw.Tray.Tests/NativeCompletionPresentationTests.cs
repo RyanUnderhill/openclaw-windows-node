@@ -42,6 +42,21 @@ public sealed class NativeCompletionPresentationTests
     }
 
     [Fact]
+    public void SharedLoadingSurfaceOmitsSubstepSubtitleButPreservesAccessibleActivityAndMeasurements()
+    {
+        var xaml = XDocument.Parse(Read(@"src\OpenClaw.SetupEngine.UI\Controls\SetupLoadingView.xaml"));
+        XNamespace x = "http://schemas.microsoft.com/winfx/2006/xaml";
+        Assert.DoesNotContain(xaml.Descendants(), element => (string?)element.Attribute(x + "Name") == "Detail");
+        var progress = Assert.Single(xaml.Descendants(),
+            element => (string?)element.Attribute(x + "Name") == "ActivityProgress");
+        Assert.Equal("ProgressBar", progress.Name.LocalName);
+        Assert.Equal("Polite", (string?)progress.Attribute("AutomationProperties.LiveSetting"));
+        Assert.Contains(xaml.Descendants(), element => (string?)element.Attribute(x + "Name") == "Measurement");
+        var source = Read(@"src\OpenClaw.SetupEngine.UI\Controls\SetupLoadingView.xaml.cs");
+        Assert.Contains("AutomationProperties.SetName(ActivityProgress, snapshot.Activity ?? DetailFor(snapshot.Step))", source);
+    }
+
+    [Fact]
     public void LoadingSubstepsHaveCopyInEverySupportedLocale()
     {
         var keys = new[] { "Gateway", "StartGateway", "PairGateway", "AcquireArtifacts", "ApplyCapabilities",

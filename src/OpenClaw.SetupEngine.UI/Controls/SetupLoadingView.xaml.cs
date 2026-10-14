@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace OpenClaw.SetupEngine.UI.Controls;
@@ -41,7 +42,7 @@ public sealed partial class SetupLoadingView : UserControl, IDisposable
             Visibility = snapshot is null ? Visibility.Collapsed : Visibility.Visible;
             if (snapshot is null) return;
             Title.Text = TitleFor(snapshot.Group);
-            Detail.Text = snapshot.Activity ?? DetailFor(snapshot.Step);
+            AutomationProperties.SetName(ActivityProgress, snapshot.Activity ?? DetailFor(snapshot.Step));
             var detail = snapshot.Detail;
             ActivityProgress.IsIndeterminate = detail?.Total is not > 0;
             ActivityProgress.Minimum = 0;

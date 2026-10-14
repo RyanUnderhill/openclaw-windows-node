@@ -190,6 +190,30 @@ public sealed class LocalAiOnboardingTests
         Assert.Equal([LocalAiSetupStage.CheckingHardware, LocalAiSetupStage.CheckingHardware], stages);
     }
 
+    [Fact]
+    public async Task InitialObservationCancellationFencesLateSnapshotAndExplicitRefreshHasItsOwnLifetime()
+    {
+        var first = new TaskCompletionSource<LocalAiOnboardingSnapshot>();
+        var host = new ObservationHost(first.Task, Task.FromResult(new LocalAiOnboardingSnapshot(
+            LocalAiOnboardingState.SetUp, Target)));
+        await using var observation = new LocalAiOnboardingObservation(host);
+        using var initial = new CancellationTokenSource();
+        var notifications = 0;
+        observation.Changed += () => notifications++;
+        var pending = observation.RefreshAsync(null, initial.Token);
+        initial.Cancel();
+        Assert.True(host.Tokens[0].IsCancellationRequested);
+        first.SetResult(new(LocalAiOnboardingState.Use, Target));
+        await pending;
+        Assert.Equal(LocalAiOnboardingState.Checking, observation.Snapshot.State);
+        Assert.Equal(1, notifications);
+        await observation.RefreshAsync();
+        Assert.False(host.Tokens[1].IsCancellationRequested);
+        Assert.Equal(LocalAiOnboardingState.SetUp, observation.Snapshot.State);
+        Assert.Equal(3, notifications);
+        Assert.Equal(0, host.Mutations);
+    }
+
     [Theory]
     [InlineData(LocalAiRuntimeState.Stopped, LocalAiOnboardingState.StartAndUse)]
     [InlineData(LocalAiRuntimeState.Healthy, LocalAiOnboardingState.Use)]

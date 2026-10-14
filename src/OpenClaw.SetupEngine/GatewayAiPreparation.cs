@@ -12,6 +12,11 @@ public sealed class GatewayAiPreparation : IAsyncDisposable
     private bool _released;
     public GatewayAiSetupClient Client { get; }
     public GatewayAiDiscoveryFailure? DiscoveryFailure { get; private set; }
+    /// <summary>The original authenticated transport for initial read-only preparation, not mutation admission.</summary>
+    public IGatewayAiSetupTransport Transport
+    {
+        get { RequireCurrent(); return _transport; }
+    }
 
     private GatewayAiPreparation(IGatewayAiSetupTransport transport, IAsyncDisposable owner, GatewayAiSetupClient client)
     {

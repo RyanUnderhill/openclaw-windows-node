@@ -112,6 +112,21 @@ provider unspecified so policy can choose among the actual offered values.
 
 ### Native Gateway MSIX (isolated or legacy)
 
+Initial native preparation stays on the existing four-step Gateway page through
+authenticated pairing and provider discovery, isolated diagnostic console anchoring,
+and the first read-only Local AI readiness check. `NativeAiPreparation` transfers
+the same authenticated connection, live console cursor and bounded output buffer,
+and settled `LocalAiOnboardingObservation` to **Connect your AI**. That page displays
+choices and readiness without repeating these initial reads or showing connection
+and console preparation progress. Explicit Refresh, provider and Local AI actions
+retain their normal progress. Settled preparation is not verified AI: a selected
+model still requires the existing explicit action and exact-model verification.
+Console failures remain logged and visible as recovery issues; provider discovery
+failures retain Local AI recovery and explicit Refresh. Failed hardware/file reads
+settle as unknown rather than healthy. Cancellation or changed authenticated
+authority prevents the handoff and releases only the original preparation owners.
+No runtime installation, provider mutation or consent is admitted by readiness.
+
 For an authenticated isolated native Gateway, **Install and use Local AI** captures
 one in-memory consent for the reviewed Gateway, endpoint binding, model and port.
 Native acquisition review does not inspect `.wslconfig` or require consent to
@@ -426,8 +441,20 @@ the [artwork section](#artwork-and-motion) covers motion and asset packaging.
 
 ### Consolidated loading groups
 
-Loading uses three stable major titles: **Preparing Gateway**, **Setting up
-Local AI**, and **Finishing setup**, followed by the verified Ready chooser.
+The shared loading surface is reserved for **Setting up Local AI** and
+**Finishing setup**, followed by the verified Ready chooser.
+Native Gateway installation keeps its four-step page visible instead of using
+the shared loading overlay: device support, package verification, profile
+preparation, then Gateway startup and verification. Live status stays below the
+steps, and startup failures belong to the startup step. Pairing, AI-choice
+discovery, isolated console anchoring and the initial Local AI readiness check
+settle on this page before navigation to AI setup.
+The AI page consumes those prepared owners and read-only results without opening a
+second Gateway loading screen. Connection and discovery refresh/retry work uses
+the AI page's existing inline progress steps, not a **Preparing Gateway** overlay.
+The shared loading surface shows the title and progress indicator without a
+substep subtitle. Current activity remains available as the progress indicator's
+accessible name; real download measurements remain visible.
 `SetupLoadingProgress` supplies operation-scoped snapshots, not elapsed-time
 estimates. Real operations report before their awaits: authenticated connection,
 pairing, discovery, capabilities/configuration, Gateway restart and health,
@@ -488,10 +515,13 @@ second runtime owner is created. Packaged restart/GPU proof remains required.
 ### Verified native completion
 
 `NativeGatewaySetupPage` stays in preparation through authenticated connection,
-pairing and minimum provider discovery. `GatewayAiPreparation` transfers that
-connection and discovery exactly once to `AiSetupPage`, bound to its authority
-and generation. Console cursor initialization precedes provider actions; optional
-Local AI hardware observation does not block hosted-provider choices.
+pairing, minimum provider discovery, isolated console anchoring and the initial
+read-only Local AI observation. `NativeAiPreparation` composes that handoff without
+moving UI lifetime concerns into the engine. `GatewayAiPreparation` still validates
+and transfers the original connection and discovery exactly once to `AiSetupPage`,
+bound to its authority and generation. The same console and settled observation
+continue on the AI page without repeated initial work. Optional observation failure
+settles as unknown and does not prevent hosted-provider choices.
 Timeout, I/O and malformed-response failures from the read-only provider
 discovery request transfer an explicit failed-discovery state with that same
 authenticated owner only after current route, generation, connection and admin
@@ -1470,6 +1500,16 @@ clean directory and checks every setup asset, including nested SVGs and notices.
 
 Run the repository-required build, Shared and Tray suites, plus
 `OpenClaw.SetupEngine.Tests` for the flow and AI protocol contracts.
+`NativePendingStartLiveProofTests` in `OpenClaw.Connection.Tests` is explicitly
+skipped unless `OPENCLAW_RUN_NATIVE_PENDING_PROOF=1`. Run it only after approval
+and a coordinated synthetic `gw-startup` package/session is prepared with its
+test-only delayed-listener gate verified. Set `OPENCLAW_NATIVE_PROOF_VERSION`,
+`OPENCLAW_NATIVE_PROOF_PORT`, and an unused absolute
+`OPENCLAW_NATIVE_PROOF_OUTPUT` path. It uses the unchanged startup client/runtime,
+allows only the qualified test package's start/status/stop commands, requires
+one accepted pending start followed by fresh listener identity proof within the
+existing 180-second startup budget, and sends no Gateway credentials.
+It is not a test against the Store Gateway or evidence that a provider is ready.
 `AiReadyPageRenderingTests` covers the three destinations and isolated startup.
 `SetupLoadingViewRenderingTests` checks the arranged mascot, text and progress
 bounds against the viewport center across progress updates, themes and resizing.

@@ -59,7 +59,7 @@ public sealed class LocalAiOnboardingOwnershipTests
         Assert.Contains("ExpectedEndpointBinding = intent.Target.EndpointBinding", window);
         Assert.Contains("owner.ContinueInstalledNativeLocalAi();", progress);
         var start = page.IndexOf("if (_args.InstallAndUse is { IsConsumed: false } intent)", StringComparison.Ordinal);
-        var end = page.IndexOf("if (_localObservation is not null && _localExpectedModel is null)", start, StringComparison.Ordinal);
+        var end = page.IndexOf("if (initialNativePrepared && _isolatedConsole", start, StringComparison.Ordinal);
         var continuation = page[start..end];
         Assert.Contains("EnsureLocalAiCanStart(intent.Target.GatewayId)", continuation);
         Assert.Contains("await _localUse.UseInstalledAsync(intent", continuation);
@@ -99,9 +99,9 @@ public sealed class LocalAiOnboardingOwnershipTests
         Assert.True(observation >= 0 && observation < connect);
         Assert.Contains("observationStarted = true;", initialize[observation..connect]);
         var optionalStart = initialize.LastIndexOf(
-            "if (_localObservation is not null && _localExpectedModel is null)", StringComparison.Ordinal);
+            "if (!initialNativePrepared && _localObservation is not null && _localExpectedModel is null)", StringComparison.Ordinal);
         var consoleStart = initialize.IndexOf(
-            "if (_args.NativeSession is { IsIsolated: true } isolated)", optionalStart, StringComparison.Ordinal);
+            "if (!initialNativePrepared && _args.NativeSession is { IsIsolated: true } isolated)", optionalStart, StringComparison.Ordinal);
         Assert.True(optionalStart > connect && consoleStart > optionalStart);
         var optionalObservation = initialize[optionalStart..consoleStart].Replace("\r\n", "\n", StringComparison.Ordinal);
         Assert.Contains("if (!observationStarted)\n                " +
@@ -124,7 +124,7 @@ public sealed class LocalAiOnboardingOwnershipTests
         Assert.Contains("ISetupLocalAiHost? LocalAiHost", page);
         Assert.Contains("ReviewLocalAi: ReviewLocalAiAsync", window);
         Assert.Contains("await _localAiHost.RevalidateReviewAsync(selection, _lifetimeCts.Token)", window);
-        Assert.Contains("_localObservation = new(host)", page);
+        Assert.Contains("_localObservation ??= new(host)", page);
         Assert.DoesNotContain("ShowLocalAiSetupAsync", page + window);
         Assert.DoesNotContain("new SetupWindow(", page + window);
         Assert.DoesNotContain("new LlamaServerRuntimeService", page + window);
