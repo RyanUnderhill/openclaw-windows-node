@@ -4612,7 +4612,7 @@ Não foi possível verificar o MXC. Os comandos são bloqueados. Repare a instal
     <value>Concessões de pastas personalizadas ainda ativas</value>
   </data>
   <data name="SandboxPage_Files.Text" xml:space="preserve">
-    <value>📁 Arquivos</value>
+    <value>Acesso a arquivos</value>
   </data>
   <data name="SandboxPage_ByDefaultTheAgent.Text" xml:space="preserve">
     <value>O escopo selecionado controla o acesso aos arquivos. Estas linhas adicionam permissões; Usar escopo mantém as permissões existentes da pasta. Escolha Pastas selecionadas para limitar o acesso às permissões explícitas. Pastas protegidas continuam bloqueadas.</value>
@@ -4654,13 +4654,13 @@ Não foi possível verificar o MXC. Os comandos são bloqueados. Repare a instal
     <value>Leitura e escrita</value>
   </data>
   <data name="SandboxPage_ToolDirectoriesOnYour.Text" xml:space="preserve">
-    <value>As pastas de execução do Windows estão disponíveis. Outras ferramentas devem estar no escopo selecionado ou em uma pasta explicitamente permitida. Estar no PATH não concede acesso a arquivos.</value>
+    <value>As pastas de execução do Windows e o espaço de trabalho privado continuam disponíveis. Estar no PATH não concede acesso. Reaplique uma predefinição para redefinir as escolhas de pastas.</value>
   </data>
   <data name="SandboxPage_CustomFolders.Text" xml:space="preserve">
-    <value>Pastas personalizadas</value>
+    <value>Pastas adicionais</value>
   </data>
   <data name="SandboxPage_CustomGrantsAreAdded.Text" xml:space="preserve">
-    <value>Permissões personalizadas adicionam acesso ao escopo selecionado. Remover uma permissão não bloqueia o acesso já permitido pelo escopo. Pastas protegidas continuam bloqueadas.</value>
+    <value>Estas permissões complementam o acesso acima. Somente leitura ou Remover permissão não restringe o acesso já permitido pela predefinição ou por outra pasta. Pastas protegidas continuam bloqueadas.</value>
   </data>
   <data name="SandboxPage_Blocked4.Content" xml:space="preserve">
     <value>Remover permissão</value>
@@ -4672,7 +4672,7 @@ Não foi possível verificar o MXC. Os comandos são bloqueados. Repare a instal
     <value>Leitura e escrita</value>
   </data>
   <data name="SandboxPage_NoCustomFoldersAdded.Text" xml:space="preserve">
-    <value>Nenhuma pasta personalizada adicionada.</value>
+    <value>Nenhuma pasta pessoal compartilhada. Adicione uma pasta para começar.</value>
   </data>
   <data name="SandboxPage_AddFolder.Content" xml:space="preserve">
     <value>Adicionar pasta</value>
@@ -4706,44 +4706,6 @@ Não foi possível verificar o MXC. Os comandos são bloqueados. Repare a instal
   </data>
   <data name="SandboxPage_LocalNetworkDevicesAnd.Text" xml:space="preserve">
     <value>Dispositivos e compartilhamentos de rede local ainda não estão incluídos.</value>
-  </data>
-  <data name="SandboxPage_CommandCompatibility.Text" xml:space="preserve">
-    <value>🪟 Compatibilidade de comandos</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.Header" xml:space="preserve">
-    <value>Permitir APIs de UI do Windows</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OffContent" xml:space="preserve">
-    <value>Desligado: bloqueia chamadas de sistema Win32k</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OnContent" xml:space="preserve">
-    <value>Ligado: PowerShell e ferramentas semelhantes podem ser iniciadas</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
-    <value>Permitir APIs de UI do Windows para comandos em sandbox</value>
-  </data>
-  <data name="SandboxPage_WindowsUiCompatibilityDescription.Text" xml:space="preserve">
-    <value>O PowerShell (todas as versões) e algumas ferramentas de console usam APIs de UI do Windows durante a inicialização. Esta configuração não fornece um inventário de processos com suporte em todo o host.</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Title" xml:space="preserve">
-    <value>Barreira Win32k desativada</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Message" xml:space="preserve">
-    <value>Os controles de arquivo, rede, área de transferência, tempo limite e aprovação de comandos continuam se aplicando. As chamadas de sistema Win32k são permitidas; a política de área de transferência e a negação de injeção de entrada permanecem em vigor.</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogTitle" xml:space="preserve">
-    <value>Permitir APIs de UI do Windows?</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogContent" xml:space="preserve">
-    <value>Isso permite que comandos em sandbox usem chamadas de sistema de UI do Windows. O PowerShell (todas as versões) e algumas ferramentas de console precisam disso para iniciar nas versões atuais do MXC. Esta configuração não concede um inventário de processos com suporte em todo o host: a enumeração de host via CIM/WMI não é compatível e foi observado que falha, o tasklist pode falhar ou expirar, e a saída do Get-Process não deve ser tratada como um inventário completo ou uma barreira de sigilo de metadados de processo.
-
-Os controles de arquivo, rede, área de transferência, tempo limite e aprovação de comandos continuam se aplicando, mas o bloqueio de chamadas de sistema Win32k será desativado. A política de área de transferência e a negação de injeção de entrada permanecem em vigor. Ative isso apenas se precisar de compatibilidade de comandos mais ampla.</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogPrimary" xml:space="preserve">
-    <value>Permitir APIs de UI</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogCancel" xml:space="preserve">
-    <value>Cancelar</value>
   </data>
   <data name="SandboxPage_Limits.Text" xml:space="preserve">
     <value>⏱ Limites</value>
@@ -7978,15 +7940,39 @@ Suas configurações, gateway, arquivos e modelos permanecem onde estão.</value
   <data name="ChatPage_SetupCheckAgain.Content" xml:space="preserve">
     <value>Verificar novamente</value>
   </data>
-  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>Predefinições substituem permissões de arquivos e acesso à internet. Área de transferência, interface do Windows e aprovações continuam independentes.</value></data>
+  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>Predefinições substituem permissões de arquivos e acesso à internet. Área de transferência, limites e aprovações continuam independentes.</value></data>
   <data name="SandboxPage_CustomPreset.Text" xml:space="preserve"><value>Permissões personalizadas</value></data>
   <data name="SandboxPage_ApplyPreset" xml:space="preserve"><value>Aplicar predefinição</value></data>
   <data name="SandboxPage_PresetStrict.Text" xml:space="preserve"><value>Estrito</value></data>
-  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>Equilibrado (padrão)</value></data>
+  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>Equilibrado</value></data>
+  <data name="SandboxPage_Title.Text" xml:space="preserve"><value>Node Sandbox</value></data>
+  <data name="SandboxPage_ResolvedFolders.Header" xml:space="preserve"><value>Pastas incluídas</value></data>
+  <data name="SandboxPage_FileAccessReadOnly" xml:space="preserve"><value>Seu perfil de usuário e suas pastas pessoais, incluindo pastas redirecionadas, podem ser lidos. As permissões adicionais abaixo também podem permitir alterações. Pastas protegidas continuam bloqueadas.</value></data>
+  <data name="SandboxPage_FileAccessReadWrite" xml:space="preserve"><value>Os programas podem ler e alterar arquivos no seu perfil de usuário e nas suas pastas pessoais, incluindo pastas redirecionadas. Pastas protegidas continuam bloqueadas.</value></data>
+  <data name="SandboxPage_FileAccessSelected" xml:space="preserve"><value>O acesso a arquivos pessoais vem apenas das permissões adicionais abaixo. As pastas de execução do Windows e o espaço de trabalho privado continuam disponíveis. Pastas protegidas continuam bloqueadas.</value></data>
+  <data name="SandboxPage_SavedFolderFormat" xml:space="preserve"><value>{0} (permissão salva): {1}</value></data>
+  <data name="SandboxPage_FolderUnavailable" xml:space="preserve"><value>Localização da pasta indisponível</value></data>
+  <data name="SandboxPage_FolderAccessFormat" xml:space="preserve"><value>Acesso para {0}</value></data>
+  <data name="SandboxPage_RemoveFolderFormat" xml:space="preserve"><value>Remover permissão para {0}</value></data>
+  <data name="SandboxPage_FolderList.Text" xml:space="preserve"><value>Pastas</value></data>
+  <data name="SandboxPage_FolderListHelp.Text" xml:space="preserve"><value>Escolha o que o agente pode fazer em cada pasta. Sem acesso bloqueia essa pasta, mas subpastas explicitamente listadas mantêm seu próprio acesso. Pastas protegidas continuam bloqueadas.</value></data>
+  <data name="SandboxPage_NoAccess.Content" xml:space="preserve"><value>Sem acesso</value></data>
+  <data name="SandboxPage_Profile.Text" xml:space="preserve"><value>Perfil de usuário</value></data>
+  <data name="SandboxPage_OneDrive.Text" xml:space="preserve"><value>OneDrive</value></data>
+  <data name="SandboxPage_FolderAccess.PlaceholderText" xml:space="preserve"><value>Escolher acesso</value></data>
+  <data name="SandboxPage_ResetFolder" xml:space="preserve"><value>Redefinir</value></data>
+  <data name="SandboxPage_RemoveFolder" xml:space="preserve"><value>Remover</value></data>
+  <data name="SandboxPage_ResetFolderFormat" xml:space="preserve"><value>Restaurar o acesso predefinido de {0}</value></data>
+  <data name="SandboxPage_LegacyFolderReview" xml:space="preserve"><value>A permissão bloqueada salva precisa de revisão. Ela não nega o acesso de uma predefinição ou pasta pai.</value></data>
+  <data name="SandboxPage_RuntimeFolder" xml:space="preserve"><value>O acesso às pastas de execução do Windows é fixo como somente leitura.</value></data>
+  <data name="SandboxPage_LegacyFolderAccess.Content" xml:space="preserve"><value>Bloqueio antigo (revisar)</value></data>
   <data name="SandboxPage_PresetOpen.Text" xml:space="preserve"><value>Aberto</value></data>
-  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>Sem arquivos pessoais ou internet. Apenas acesso de execução e pasta de trabalho privada.</value></data>
-  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>Leia seu perfil e pastas pessoais redirecionadas resolvidas. Sem escrita pessoal. Internet ativada. Pastas protegidas excluídas.</value></data>
-  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>Leia e escreva seu perfil e pastas pessoais redirecionadas resolvidas. Internet ativada. Pastas protegidas excluídas.</value></data>
+  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>Mantenha o agente sob controle rigoroso.</value></data>
+  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>Ajuda nas tarefas do dia a dia, com menos riscos.</value></data>
+  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>Dê ao agente mais liberdade para realizar tarefas.</value></data>
+  <data name="SandboxPage_PresetStrictDetails" xml:space="preserve"><value>Sem arquivos pessoais ou internet. Apenas acesso de execução e pasta de trabalho privada.</value></data>
+  <data name="SandboxPage_PresetBalancedDetails" xml:space="preserve"><value>Leia seu perfil e pastas pessoais redirecionadas resolvidas. Sem escrita pessoal. Internet ativada. Pastas protegidas excluídas.</value></data>
+  <data name="SandboxPage_PresetOpenDetails" xml:space="preserve"><value>Leia e escreva seu perfil e pastas pessoais redirecionadas resolvidas. Internet ativada. Pastas protegidas excluídas.</value></data>
   <data name="SandboxPage_FileScope.Header" xml:space="preserve"><value>Escopo de acesso a arquivos</value></data>
   <data name="SandboxPage_SelectedFolders.Content" xml:space="preserve"><value>Pastas selecionadas</value></data>
   <data name="SandboxPage_UserFilesReadOnly.Content" xml:space="preserve"><value>Pastas do usuário: somente leitura</value></data>
@@ -7994,7 +7980,7 @@ Suas configurações, gateway, arquivos e modelos permanecem onde estão.</value
   <data name="SandboxPage_CheckingTitle" xml:space="preserve"><value>Verificando disponibilidade do MXC</value></data>
   <data name="SandboxPage_CheckingText" xml:space="preserve"><value>Verificando suporte à contenção de comandos. As permissões não são alteradas.</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>Resolução de pastas do usuário incompleta</value></data>
-  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>Uma pasta necessária não foi resolvida ou está inacessível. Comandos desse escopo são bloqueados. Revise as localizações, tente novamente ou escolha Pastas selecionadas e uma pasta disponível que não seja raiz. Raízes protegidas e aprovações sempre se aplicam.</value></data>
+  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>Uma pasta pessoal necessária não foi encontrada ou está inacessível. Comandos que usam essas pastas são bloqueados. Consulte a lista de pastas, restaure a localização da pasta no Windows e tente novamente. Pastas protegidas e aprovações de comandos sempre se aplicam.</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>Tempo limite de comando: {0} s</value></data>
   <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>Permissões de arquivos dos comandos</value></data>
   <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>Novos perfis isolados: Estrito não concede arquivos pessoais ou internet. Equilibrado lê seu perfil e pastas Documentos, Área de Trabalho, Downloads e OneDrive disponíveis resolvidas, sem escrita pessoal. Aberto lê e escreve o mesmo escopo. Equilibrado/Aberto ativam a internet. Outros usuários e unidades inteiras não são incluídos. Projetos fora dessas raízes precisam de permissões personalizadas. Pastas protegidas se aplicam com isolamento; aprovações continuam ativas. Windows confirmado como incompatível executa sem isolamento, com aviso e controles de sandbox desativados. Configurações Custom existentes são preservadas, exceto ao reaplicar explicitamente. Área de transferência e interface do Windows continuam independentes. Node Sandbox mostra localizações resolvidas e erros.</value></data>

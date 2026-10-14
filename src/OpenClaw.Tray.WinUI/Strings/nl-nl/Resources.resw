@@ -4594,7 +4594,7 @@ MXC kon niet worden geverifieerd. Opdrachten worden geblokkeerd. Herstel de inst
     <value>Aangepaste mapmachtigingen nog steeds actief</value>
   </data>
   <data name="SandboxPage_Files.Text" xml:space="preserve">
-    <value>📁 Bestanden</value>
+    <value>Bestandstoegang</value>
   </data>
   <data name="SandboxPage_ByDefaultTheAgent.Text" xml:space="preserve">
     <value>Het geselecteerde bereik bepaalt de bestandstoegang. Deze regels voegen mapmachtigingen toe; Bereik gebruiken behoudt de bestaande toegang. Kies Geselecteerde mappen om toegang tot expliciete machtigingen te beperken. Beschermde mappen blijven geblokkeerd.</value>
@@ -4636,13 +4636,13 @@ MXC kon niet worden geverifieerd. Opdrachten worden geblokkeerd. Herstel de inst
     <value>Lezen &amp; schrijven</value>
   </data>
   <data name="SandboxPage_ToolDirectoriesOnYour.Text" xml:space="preserve">
-    <value>Windows-runtimemappen zijn beschikbaar. Andere hulpprogramma's moeten binnen het geselecteerde bereik of een expliciet toegestane map staan. Vermelding in PATH verleent geen bestandstoegang.</value>
+    <value>Windows-runtimemappen en privéwerkruimte blijven beschikbaar. Vermelding in PATH verleent geen toegang. Pas een voorinstelling opnieuw toe om mapkeuzes te herstellen.</value>
   </data>
   <data name="SandboxPage_CustomFolders.Text" xml:space="preserve">
-    <value>Aangepaste mappen</value>
+    <value>Extra mappen</value>
   </data>
   <data name="SandboxPage_CustomGrantsAreAdded.Text" xml:space="preserve">
-    <value>Aangepaste machtigingen voegen toegang toe aan het geselecteerde bereik. Een machtiging verwijderen blokkeert geen toegang die het bereik al toestaat. Beschermde mappen blijven geblokkeerd.</value>
+    <value>Deze machtigingen vullen de bovenstaande bestandstoegang aan. Alleen-lezen of Machtiging verwijderen beperkt geen toegang die de voorinstelling of een andere map al toestaat. Beschermde mappen blijven geblokkeerd.</value>
   </data>
   <data name="SandboxPage_Blocked4.Content" xml:space="preserve">
     <value>Machtiging verwijderen</value>
@@ -4654,7 +4654,7 @@ MXC kon niet worden geverifieerd. Opdrachten worden geblokkeerd. Herstel de inst
     <value>Lezen &amp; schrijven</value>
   </data>
   <data name="SandboxPage_NoCustomFoldersAdded.Text" xml:space="preserve">
-    <value>Geen aangepaste mappen toegevoegd.</value>
+    <value>Geen persoonlijke mappen gedeeld. Voeg een map toe om te beginnen.</value>
   </data>
   <data name="SandboxPage_AddFolder.Content" xml:space="preserve">
     <value>Map toevoegen</value>
@@ -4688,42 +4688,6 @@ MXC kon niet worden geverifieerd. Opdrachten worden geblokkeerd. Herstel de inst
   </data>
   <data name="SandboxPage_LocalNetworkDevicesAnd.Text" xml:space="preserve">
     <value>Lokale netwerkapparaten en gedeelde mappen zijn nog niet inbegrepen.</value>
-  </data>
-  <data name="SandboxPage_CommandCompatibility.Text" xml:space="preserve">
-    <value>🪟 Opdrachtcompatibiliteit</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.Header" xml:space="preserve">
-    <value>Windows UI-API's toestaan</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OffContent" xml:space="preserve">
-    <value>Uit: blokkeert Win32k-systeemaanroepen</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OnContent" xml:space="preserve">
-    <value>Aan: PowerShell en vergelijkbare hulpprogramma's kunnen starten</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
-    <value>Windows UI-API's toestaan voor opdrachten in de sandbox</value>
-  </data>
-  <data name="SandboxPage_WindowsUiCompatibilityDescription.Text" xml:space="preserve">
-    <value>PowerShell (alle versies) en sommige consolehulpprogramma's gebruiken Windows UI-API's tijdens het opstarten. Deze instelling biedt geen ondersteunde inventaris van alle hostprocessen.</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Title" xml:space="preserve">
-    <value>Win32k-grens uitgeschakeld</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Message" xml:space="preserve">
-    <value>Bestands-, netwerk-, klembord-, time-out- en opdrachtgoedkeuringsregels blijven gelden. Win32k-systeemaanroepen zijn toegestaan; het klembordbeleid en het verbod op invoerinjectie blijven van kracht.</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogTitle" xml:space="preserve">
-    <value>Windows UI-API's toestaan?</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogContent" xml:space="preserve">
-    <value>Hiermee kunnen opdrachten in de sandbox Windows UI-systeemaanroepen gebruiken. PowerShell (alle versies) en sommige consolehulpprogramma's hebben dit nodig om met huidige MXC-versies te starten. Deze instelling verleent geen ondersteunde inventaris van alle hostprocessen: CIM/WMI-enumeratie van de host wordt niet ondersteund en is waargenomen als mislukt, tasklist kan mislukken of een time-out krijgen en de uitvoer van Get-Process mag niet worden beschouwd als een volledige inventaris of als een geheimhoudingsgrens voor procesmetadata.&#xA;&#xA;Bestands-, netwerk-, klembord-, time-out- en opdrachtgoedkeuringsregels blijven gelden, maar de blokkering van Win32k-systeemaanroepen wordt uitgeschakeld. Het klembordbeleid en het verbod op invoerinjectie blijven van kracht. Schakel dit alleen in als u bredere opdrachtcompatibiliteit nodig hebt.</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogPrimary" xml:space="preserve">
-    <value>UI-API's toestaan</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogCancel" xml:space="preserve">
-    <value>Annuleren</value>
   </data>
   <data name="SandboxPage_Limits.Text" xml:space="preserve">
     <value>⏱ Limieten</value>
@@ -7925,15 +7889,39 @@ Uw instellingen, gateway, bestanden en modellen blijven op hun plaats.</value>
   <data name="ChatPage_SetupCheckAgain.Content" xml:space="preserve">
     <value>Opnieuw controleren</value>
   </data>
-  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>Voorinstellingen vervangen mapmachtigingen en internettoegang. Klembord, Windows-UI en opdrachtgoedkeuring blijven onafhankelijk.</value></data>
+  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>Voorinstellingen vervangen mapmachtigingen en internettoegang. Klembord, limieten en opdrachtgoedkeuring blijven onafhankelijk.</value></data>
   <data name="SandboxPage_CustomPreset.Text" xml:space="preserve"><value>Aangepaste machtigingen</value></data>
   <data name="SandboxPage_ApplyPreset" xml:space="preserve"><value>Voorinstelling toepassen</value></data>
   <data name="SandboxPage_PresetStrict.Text" xml:space="preserve"><value>Strikt</value></data>
-  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>Evenwichtig (standaard)</value></data>
+  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>Evenwichtig</value></data>
+  <data name="SandboxPage_Title.Text" xml:space="preserve"><value>Node Sandbox</value></data>
+  <data name="SandboxPage_ResolvedFolders.Header" xml:space="preserve"><value>Inbegrepen mappen</value></data>
+  <data name="SandboxPage_FileAccessReadOnly" xml:space="preserve"><value>Uw gebruikersprofiel en persoonlijke mappen, inclusief omgeleide mappen, zijn leesbaar. Extra machtigingen hieronder kunnen ook wijzigingen toestaan. Beschermde mappen blijven geblokkeerd.</value></data>
+  <data name="SandboxPage_FileAccessReadWrite" xml:space="preserve"><value>Programma's kunnen bestanden in uw gebruikersprofiel en persoonlijke mappen lezen en wijzigen, inclusief omgeleide mappen. Beschermde mappen blijven geblokkeerd.</value></data>
+  <data name="SandboxPage_FileAccessSelected" xml:space="preserve"><value>Toegang tot persoonlijke bestanden komt alleen van de extra machtigingen hieronder. Windows-runtimemappen en privéwerkruimte blijven beschikbaar. Beschermde mappen blijven geblokkeerd.</value></data>
+  <data name="SandboxPage_SavedFolderFormat" xml:space="preserve"><value>{0} (opgeslagen machtiging): {1}</value></data>
+  <data name="SandboxPage_FolderUnavailable" xml:space="preserve"><value>Maplocatie niet beschikbaar</value></data>
+  <data name="SandboxPage_FolderAccessFormat" xml:space="preserve"><value>Toegang voor {0}</value></data>
+  <data name="SandboxPage_RemoveFolderFormat" xml:space="preserve"><value>Machtiging voor {0} verwijderen</value></data>
+  <data name="SandboxPage_FolderList.Text" xml:space="preserve"><value>Mappen</value></data>
+  <data name="SandboxPage_FolderListHelp.Text" xml:space="preserve"><value>Kies wat de agent in elke map mag doen. Geen toegang blokkeert die map, maar expliciet vermelde submappen behouden hun eigen toegang. Beschermde mappen blijven geblokkeerd.</value></data>
+  <data name="SandboxPage_NoAccess.Content" xml:space="preserve"><value>Geen toegang</value></data>
+  <data name="SandboxPage_Profile.Text" xml:space="preserve"><value>Gebruikersprofiel</value></data>
+  <data name="SandboxPage_OneDrive.Text" xml:space="preserve"><value>OneDrive</value></data>
+  <data name="SandboxPage_FolderAccess.PlaceholderText" xml:space="preserve"><value>Toegang kiezen</value></data>
+  <data name="SandboxPage_ResetFolder" xml:space="preserve"><value>Herstellen</value></data>
+  <data name="SandboxPage_RemoveFolder" xml:space="preserve"><value>Verwijderen</value></data>
+  <data name="SandboxPage_ResetFolderFormat" xml:space="preserve"><value>Vooringestelde toegang voor {0} herstellen</value></data>
+  <data name="SandboxPage_LegacyFolderReview" xml:space="preserve"><value>De opgeslagen geblokkeerde machtiging moet worden gecontroleerd. Deze weigert geen toegang vanuit een voorinstelling of bovenliggende map.</value></data>
+  <data name="SandboxPage_RuntimeFolder" xml:space="preserve"><value>Windows-runtimetoegang staat vast op alleen-lezen.</value></data>
+  <data name="SandboxPage_LegacyFolderAccess.Content" xml:space="preserve"><value>Oude blokkering (controleren)</value></data>
   <data name="SandboxPage_PresetOpen.Text" xml:space="preserve"><value>Open</value></data>
-  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>Geen persoonlijke bestanden of internet. Alleen runtime-toegang en een privéwerkmap.</value></data>
-  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>Lees uw profiel en opgeloste omgeleide persoonlijke mappen. Niet persoonlijk schrijven. Internet aan. Beschermde mappen uitgesloten.</value></data>
-  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>Lees en schrijf uw profiel en opgeloste omgeleide persoonlijke mappen. Internet aan. Beschermde mappen uitgesloten.</value></data>
+  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>Houd de agent kort aan de lijn.</value></data>
+  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>Hulp bij dagelijkse taken, met minder risico's.</value></data>
+  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>Geef de agent meer vrijheid om dingen gedaan te krijgen.</value></data>
+  <data name="SandboxPage_PresetStrictDetails" xml:space="preserve"><value>Geen persoonlijke bestanden of internet. Alleen runtime-toegang en een privéwerkmap.</value></data>
+  <data name="SandboxPage_PresetBalancedDetails" xml:space="preserve"><value>Lees uw profiel en opgeloste omgeleide persoonlijke mappen. Niet persoonlijk schrijven. Internet aan. Beschermde mappen uitgesloten.</value></data>
+  <data name="SandboxPage_PresetOpenDetails" xml:space="preserve"><value>Lees en schrijf uw profiel en opgeloste omgeleide persoonlijke mappen. Internet aan. Beschermde mappen uitgesloten.</value></data>
   <data name="SandboxPage_FileScope.Header" xml:space="preserve"><value>Bereik voor bestandstoegang</value></data>
   <data name="SandboxPage_SelectedFolders.Content" xml:space="preserve"><value>Geselecteerde mappen</value></data>
   <data name="SandboxPage_UserFilesReadOnly.Content" xml:space="preserve"><value>Gebruikersmappen: alleen lezen</value></data>
@@ -7941,7 +7929,7 @@ Uw instellingen, gateway, bestanden en modellen blijven op hun plaats.</value>
   <data name="SandboxPage_CheckingTitle" xml:space="preserve"><value>MXC-beschikbaarheid controleren</value></data>
   <data name="SandboxPage_CheckingText" xml:space="preserve"><value>Ondersteuning voor ingesloten opdrachten controleren. Machtigingen worden niet gewijzigd.</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>Gebruikersmappen niet volledig opgelost</value></data>
-  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>Een vereiste gebruikersmap is niet bereikbaar of opgelost. Opdrachten met dit bereik zijn geblokkeerd. Controleer de locaties, probeer opnieuw of kies Geselecteerde mappen en een beschikbare niet-hoofdmap. Beschermde mappen en goedkeuring blijven gelden.</value></data>
+  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>Een vereiste persoonlijke map is niet gevonden of niet toegankelijk. Opdrachten die deze mappen gebruiken zijn geblokkeerd. Bekijk de mappenlijst, herstel de Windows-locatie van de map en probeer opnieuw. Beschermde mappen en opdrachtgoedkeuringen blijven gelden.</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>Opdrachttime-out: {0} sec</value></data>
   <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>Bestandsmachtigingen voor opdrachten</value></data>
   <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>Nieuwe geïsoleerde profielen: Strikt geeft geen persoonlijke bestanden of internet. Evenwichtig leest uw profiel en opgeloste Documenten, Bureaublad, Downloads en beschikbare OneDrive-mappen, zonder persoonlijk schrijven. Open leest en schrijft hetzelfde bereik. Evenwichtig/Open hebben internet aan. Andere gebruikers en hele schijven zijn uitgesloten. Projecten buiten deze locaties vereisen aangepaste machtigingen. Beschermde mappen gelden bij isolatie; goedkeuring blijft actief. Bevestigd niet-ondersteund Windows voert zonder isolatie uit met waarschuwing en uitgeschakelde sandboxbediening. Bestaande Custom-instellingen blijven behouden tenzij u expliciet opnieuw toepast. Klembord en Windows-UI blijven onafhankelijk. Node Sandbox toont opgeloste locaties en fouten.</value></data>

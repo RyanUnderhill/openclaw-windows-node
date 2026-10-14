@@ -20,7 +20,6 @@ public static class MxcRequestBuilder
         {
             settings.SystemRunFilesystemScope,
             settings.SystemRunAllowOutbound,
-            settings.SystemRunAllowWindowsUi,
             settings.SandboxClipboard,
             settings.SandboxDocumentsAccess,
             settings.SandboxDownloadsAccess,
@@ -36,6 +35,16 @@ public static class MxcRequestBuilder
         string settingsDirectory,
         string scratchDirectory,
         MxcRequestContext? context = null)
+        => Build(command, settings, settingsDirectory, scratchDirectory, context, MxcFolderAdmission.ReadMetadata);
+
+    internal static ContainerRequest Build(
+        CommandRequest command,
+        SettingsData settings,
+        string settingsDirectory,
+        string scratchDirectory,
+        MxcRequestContext? context,
+        Func<string, MxcFolderAdmission.Metadata?> readMetadata,
+        Func<string, MxcFolderAdmission.Metadata?>? readPhysicalMetadata = null)
     {
         context ??= MxcRequestContext.Capture(settingsDirectory);
         var scope = settings.SystemRunFilesystemScope ?? SystemRunFilesystemScope.SelectedFolders;
@@ -52,46 +61,59 @@ public static class MxcRequestBuilder
             throw new NotSupportedException("Batch files require an explicitly approved canonical cmd carrier.");
 
         var scratch = Normalize(scratchDirectory);
-        var denied = context.ProtectedPaths.Append(settingsDirectory)
-            .Where(p => !string.IsNullOrWhiteSpace(p)).Select(ProtectedBoundary).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var protectedDenies = MxcPhysicalPaths.ProtectedPaths(context.ProtectedPaths.Append(settingsDirectory),
+                readPhysicalMetadata ?? MxcFolderAdmission.ReadMetadata)
+            .Select(ProtectedBoundary).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var ro = new List<string>();
         var rw = new List<string> { scratch };
+        var userDenies = new List<string>();
         if (scope is SystemRunFilesystemScope.UserFilesReadOnly or SystemRunFilesystemScope.UserFilesReadWrite)
         {
-            var access = scope == SystemRunFilesystemScope.UserFilesReadWrite ? SandboxFolderAccess.ReadWrite : SandboxFolderAccess.ReadOnly;
             _ = context.RequireFolder("Profile");
-            foreach (var folder in context.UserFolders)
-            {
-                if (folder.IsOptional && folder.Path is null && folder.Error is null) continue;
-                AddFolder(folder.RequirePath(), access, ro, rw);
-            }
         }
-        if (settings.SandboxDocumentsAccess is SandboxFolderAccess.ReadOnly or SandboxFolderAccess.ReadWrite)
-            AddFolder(context.RequireFolder("Documents"), settings.SandboxDocumentsAccess, ro, rw);
-        if (settings.SandboxDesktopAccess is SandboxFolderAccess.ReadOnly or SandboxFolderAccess.ReadWrite)
-            AddFolder(context.RequireFolder("Desktop"), settings.SandboxDesktopAccess, ro, rw);
-        if (settings.SandboxDownloadsAccess is SandboxFolderAccess.ReadOnly or SandboxFolderAccess.ReadWrite)
-            AddFolder(context.RequireFolder("Downloads"), settings.SandboxDownloadsAccess, ro, rw);
-        foreach (var folder in settings.SandboxCustomFolders ?? [])
-            AddFolder(folder.Path, folder.Access, ro, rw);
+        foreach (var folder in MxcFolderPermissions.Resolve(settings, context))
+        {
+            if (folder.Access is not null && folder.Error is not null)
+                throw new NotSupportedException(
+                    $"{string.Join(", ", folder.KnownFolders)} {folder.Path}: {folder.Error} Review Node Sandbox settings and retry.");
+            if (folder.Access == SandboxFolderAccess.NoAccess)
+                userDenies.Add(Normalize(folder.Path));
+            else
+                AddFolder(folder.Path, folder.Access, ro, rw);
+        }
 
         var windows = Normalize(context.WindowsDirectory);
         var runtimePaths = new[] { windows, Normalize(context.SystemDirectory) }.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         ro.AddRange(runtimePaths);
         foreach (var path in ro.Concat(rw))
         {
-            if (denied.Any(d => Within(path, d)))
-                throw new NotSupportedException("A selected folder is protected. Remove the conflicting grant in Node Sandbox settings.");
+            if (protectedDenies.Any(d => Within(path, d)))
+                throw new NotSupportedException("A selected folder is protected. Choose No access for the conflicting grant in Node Sandbox settings.");
             if (IsVolumeRoot(path))
                 throw new NotSupportedException("Volume roots are not an allowed file-access boundary. Select a non-root folder.");
-            RejectReparsePoints(path);
+            MxcFolderAdmission.Validate(path, readMetadata);
+        }
+        foreach (var path in userDenies)
+        {
+            if (IsVolumeRoot(path))
+                throw new NotSupportedException("Volume roots are not an allowed file-access boundary. Select a non-root folder.");
+            // User denies never move up to a missing ancestor: that would deny unrelated folders.
+            // Admission rejects remapping aliases, so these exact logical boundaries are also physical.
+            MxcFolderAdmission.Validate(path, readMetadata);
+            var parent = Path.GetDirectoryName(path);
+            if (parent is null || readMetadata(parent) is not { } metadata ||
+                (metadata.Attributes & FileAttributes.Directory) == 0 || !MxcFolderAdmission.IsAdmissible(parent, metadata))
+                throw new NotSupportedException(
+                    $"The parent of No access folder '{path}' is unavailable. Restore that exact location and retry.");
         }
 
         var cwd = string.IsNullOrWhiteSpace(command.Cwd) ? scratch : Normalize(command.Cwd);
-        RejectReparsePoints(cwd);
-        if (denied.Any(d => Within(cwd, d)) || !ro.Concat(rw).Any(g => Within(cwd, g)))
+        MxcFolderAdmission.Validate(cwd, readMetadata);
+        if (protectedDenies.Any(d => Within(cwd, d)) ||
+            MxcFolderPermissions.EffectiveAccess(cwd, ro, rw, userDenies) is null or SandboxFolderAccess.NoAccess)
             throw new NotSupportedException("The working folder is outside the granted scope. Grant it in Node Sandbox settings before retrying.");
-        if (!ro.Concat(rw).Any(g => Within(image, g)) || denied.Any(d => Within(image, d)))
+        if (protectedDenies.Any(d => Within(image, d)) ||
+            MxcFolderPermissions.EffectiveAccess(image, ro, rw, userDenies) is null or SandboxFolderAccess.NoAccess)
             throw new NotSupportedException("The approved executable is outside the granted scope. Grant its tools folder before retrying.");
 
         return new ContainerRequest(RenderArgv(command.Argv))
@@ -111,7 +133,7 @@ public static class MxcRequestBuilder
             {
                 ReadonlyPaths = ro.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 ReadwritePaths = rw.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
-                DeniedPaths = denied,
+                DeniedPaths = protectedDenies.Concat(userDenies).Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
                 ClearPolicyOnExit = true,
             },
             Network = new NetworkPolicy
@@ -121,7 +143,9 @@ public static class MxcRequestBuilder
             },
             Ui = new UiPolicy
             {
-                Disable = !settings.SystemRunAllowWindowsUi,
+                // PowerShell initializes Win32k even without a window. Keep API compatibility
+                // inside the container; desktop/job, clipboard and input restrictions are separate.
+                Disable = false,
                 Clipboard = settings.SandboxClipboard switch
                 {
                     SandboxClipboardMode.Read => ClipboardPolicy.Read,
@@ -195,7 +219,7 @@ public static class MxcRequestBuilder
     {
         if (!Path.IsPathFullyQualified(path))
             throw new NotSupportedException("Folder grants and working folders must be fully qualified.");
-        try { return Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)); }
+        try { return MxcFolderAdmission.NormalizeIdentity(path); }
         catch (ArgumentException ex)
         {
             throw new NotSupportedException(
@@ -231,14 +255,6 @@ public static class MxcRequestBuilder
         string.Equals(path, parent, StringComparison.OrdinalIgnoreCase) ||
         (!IsVolumeRoot(parent) && path.StartsWith(Path.TrimEndingDirectorySeparator(parent) + Path.DirectorySeparatorChar,
             StringComparison.OrdinalIgnoreCase));
-
-    private static void RejectReparsePoints(string path)
-    {
-        for (var current = path; !string.IsNullOrWhiteSpace(current); current = Path.GetDirectoryName(current))
-            if ((Directory.Exists(current) || File.Exists(current)) &&
-                File.GetAttributes(current).HasFlag(FileAttributes.ReparsePoint))
-                throw new NotSupportedException("Reparse-point folder grants and working folders require native alias proof and are not supported yet.");
-    }
 
     public static bool LegacyGrantWasFiltered(string path, string settingsDirectory)
     {

@@ -25,7 +25,7 @@ public sealed class MxcCommandRunnerIntegrationTests : IDisposable
     private readonly string _root;
     private readonly string _runId = "n-" + Guid.NewGuid().ToString("N");
     private readonly MxcRequestContext _context;
-    private readonly SettingsData _settings = new() { SystemRunAllowWindowsUi = true };
+    private readonly SettingsData _settings = new();
     private readonly List<object> _processes = [];
     private readonly List<object> _checks = [];
     private readonly List<string> _junctions = [];
@@ -126,6 +126,142 @@ public sealed class MxcCommandRunnerIntegrationTests : IDisposable
         Assert.False(result.TimedOut);
         Assert.Contains("PROOF_TEMP=", result.Stdout);
         Assert.Contains("PROOF_CWD=" + _lastScratch, result.Stdout, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [MxcNativeFact]
+    public async Task NativeSdk_DefaultPolicyStartsPowerShellWithoutOptIn()
+    {
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var result = await Runner.RunAsync(Cmd(
+            $"\"{powershell}\" -NoLogo -NoProfile -NonInteractive -Command \"[Console]::Out.WriteLine('MXC_DEFAULT_UI_OK')\""));
+        Write("powershell-default-policy.json", result);
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("MXC_DEFAULT_UI_OK", result.Stdout);
+        Assert.False(result.TimedOut);
+        Assert.False(Directory.Exists(_lastScratch));
+    }
+
+    [MxcNativeFact]
+    public async Task NativeSdk_NormalRootExitReapsBackgroundDescendant()
+    {
+        _settings.SandboxCustomFolders = [new() { Path = Project, Access = SandboxFolderAccess.ReadWrite }];
+        var script = Path.Combine(Project, "descendant.ps1");
+        var identity = Path.Combine(Project, "descendant.json");
+        var release = Path.Combine(Project, "release-root");
+        File.WriteAllText(script, """
+            param([string]$Identity, [string]$Release)
+            $ErrorActionPreference = 'Stop'
+            $arguments = '/d /s /c "for /l %i in (1,0,2) do @rem wait"'
+            $start = [Diagnostics.ProcessStartInfo]::new($env:ComSpec, $arguments)
+            $start.UseShellExecute = $false
+            $start.CreateNoWindow = $true
+            $start.WorkingDirectory = [IO.Path]::GetDirectoryName($Identity)
+            $child = [Diagnostics.Process]::Start($start)
+            $launcher = [Diagnostics.Process]::GetCurrentProcess()
+            $records = @(
+                @{ Pid=$child.Id; StartTimeUtc=$child.StartTime.ToUniversalTime().ToString('O')
+                   Executable=$env:ComSpec; CommandLine="$env:ComSpec $arguments" },
+                @{ Pid=$PID; StartTimeUtc=$launcher.StartTime.ToUniversalTime().ToString('O')
+                   Executable=$launcher.MainModule.FileName; CommandLine=[Environment]::CommandLine }
+            )
+            [IO.File]::WriteAllText("$Identity.writing", ($records | ConvertTo-Json))
+            [IO.File]::Move("$Identity.writing", $Identity)
+            $clock = [Diagnostics.Stopwatch]::StartNew()
+            while (-not [IO.File]::Exists($Release)) {
+                if ($clock.Elapsed.TotalSeconds -gt 20) { throw 'Root-release handshake expired.' }
+                Start-Sleep -Milliseconds 20
+            }
+            [Console]::Out.WriteLine('native-root-output')
+            [Console]::Error.WriteLine('native-root-error')
+            """);
+        var powershell = Path.Combine(Environment.SystemDirectory, "WindowsPowerShell", "v1.0", "powershell.exe");
+        var running = Runner.RunAsync(Cmd(
+            $"\"{powershell}\" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass " +
+            $"-File \"{script}\" \"{identity}\" \"{release}\" & exit /b 7"));
+        Process? child = null;
+        var childIdentityVerified = false;
+        try
+        {
+            for (var i = 0; i < 300 && !File.Exists(identity) && !running.IsCompleted; i++)
+                await Task.Delay(50);
+            Assert.True(File.Exists(identity), "The native descendant must report its identity before root exit.");
+            using var records = JsonDocument.Parse(File.ReadAllText(identity));
+            var childIdentity = records.RootElement[0];
+            foreach (var record in records.RootElement.EnumerateArray())
+                _processes.Add(new
+                {
+                    Pid = record.GetProperty("Pid").GetInt32(),
+                    StartTimeUtc = record.GetProperty("StartTimeUtc").GetString(),
+                    Executable = record.GetProperty("Executable").GetString(),
+                    CommandLine = record.GetProperty("CommandLine").GetString(),
+                    DataDirectories = IsolationRoots(), RunId = _runId,
+                });
+            Write("processes.json", _processes);
+            child = Process.GetProcessById(childIdentity.GetProperty("Pid").GetInt32());
+            _ = child.SafeHandle;
+            Assert.Equal(childIdentity.GetProperty("StartTimeUtc").GetString(), child.StartTime.ToUniversalTime().ToString("O"));
+            Assert.Equal(Path.Combine(Environment.SystemDirectory, "cmd.exe"), child.MainModule!.FileName, StringComparer.OrdinalIgnoreCase);
+            childIdentityVerified = true;
+            Assert.False(child.HasExited);
+            Write("descendant-before-root-exit.json", new { child.Id, Exited = child.HasExited });
+            File.WriteAllText(release, "release");
+
+            var result = await running.WaitAsync(TimeSpan.FromSeconds(35));
+            Write("descendant-root-output.json", result);
+            Write("descendant-after-finalization.json", new { child.Id, Exited = child.HasExited });
+            Assert.Equal(7, result.ExitCode);
+            Assert.False(result.TimedOut);
+            Assert.Contains("native-root-output", result.Stdout);
+            Assert.Contains("native-root-error", result.Stderr);
+            Assert.True(child.HasExited, "Native finalization must reap the background descendant before returning.");
+            Assert.False(Directory.Exists(_lastScratch));
+        }
+        finally
+        {
+            try
+            {
+                File.WriteAllText(release, "release");
+                var result = await running.WaitAsync(TimeSpan.FromSeconds(35));
+                Write("descendant-root-output.json", result);
+            }
+            finally
+            {
+                if (child is not null)
+                {
+                    try
+                    {
+                        if (!child.HasExited)
+                        {
+                            Assert.True(childIdentityVerified, "Descendant cleanup is blocked because its identity could not be verified.");
+                            child.Kill();
+                            await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
+                        }
+                        Write("descendant-cleanup.json", new { child.Id, Exited = child.HasExited });
+                    }
+                    finally { child.Dispose(); }
+                }
+            }
+        }
+    }
+
+    [MxcNativeFact]
+    public async Task NativeSdk_DeadlineRetainsStdoutAndStderr()
+    {
+        var command = Cmd("echo deadline-output & echo deadline-error 1>&2 & for /l %i in (1,0,2) do @rem wait");
+        command.TimeoutMs = 2_000;
+        try
+        {
+            var result = await Runner.RunAsync(command);
+            Write("deadline-output.json", result);
+            Assert.True(result.TimedOut);
+            Assert.Contains("deadline-output", result.Stdout);
+            Assert.Contains("deadline-error", result.Stderr);
+        }
+        finally
+        {
+            for (var i = 0; i < 200 && Directory.Exists(_lastScratch); i++) await Task.Delay(50);
+            Assert.False(Directory.Exists(_lastScratch), "Native cleanup is still owned; retain the fixture.");
+        }
     }
 
     [MxcNativeFact]

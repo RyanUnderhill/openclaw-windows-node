@@ -35,6 +35,27 @@ public sealed class LegacyMxcFilesTests : IDisposable
         Assert.All(LegacyMxcFiles.RelativePaths, relative => Assert.True(File.Exists(Path.Combine(_root, relative))));
     }
 
+    [Fact]
+    public void InstallerChecksEveryExactDeletionIncludingEmptyDirectories()
+    {
+        var repo = Environment.GetEnvironmentVariable("OPENCLAW_REPO_ROOT") ?? Directory.GetCurrentDirectory();
+        var installer = File.ReadAllText(Path.Combine(repo, "installer.iss"));
+        var section = System.Text.RegularExpressions.Regex.Match(installer, @"(?ms)^\[InstallDelete\]\s*(.*?)^\[").Groups[1].Value;
+        var entries = section.Split('\n').Where(line => line.StartsWith("Type:", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(7, entries.Length);
+        Assert.Equal(4, entries.Count(line => line.StartsWith("Type: files;", StringComparison.Ordinal)));
+        foreach (var entry in entries)
+        {
+            var path = System.Text.RegularExpressions.Regex.Match(entry, "Name: \"([^\"]+)\"").Groups[1].Value;
+            Assert.StartsWith(@"{app}\tools\mxc\", path + "\\");
+            Assert.Contains($"Check: LegacyMxcPathIsOrdinary(ExpandConstant('{path}'))", entry);
+        }
+        var wrapper = installer[installer.IndexOf("function LegacyMxcPathIsOrdinary(", StringComparison.Ordinal)..
+            installer.IndexOf("function InitializeUninstall:", StringComparison.Ordinal)];
+        Assert.Contains("Result := MigrationPathIsOrdinary(Path);", wrapper);
+        Assert.Contains("if not Result then", wrapper);
+    }
+
     private void Write(string relative)
     {
         var path = Path.Combine(_root, relative);

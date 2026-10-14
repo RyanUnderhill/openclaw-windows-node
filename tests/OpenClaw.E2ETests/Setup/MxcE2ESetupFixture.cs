@@ -28,7 +28,6 @@ public sealed class MxcE2ESetupFixture : IAsyncLifetime
         {
             settings["SandboxTimeoutMs"] = 120_000;
             settings["SystemRunFilesystemScope"] = OpenClaw.Shared.SystemRunFilesystemScope.SelectedFolders;
-            settings["SystemRunAllowWindowsUi"] = true;
         }, useProductionLikeDataRoot: true);
         await _inner.InitializeAsync();
     }

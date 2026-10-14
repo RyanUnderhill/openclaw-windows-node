@@ -17,11 +17,12 @@
                            Grid.Column="0"
                            Text="🛡"
                            FontSize="28"
+                           AutomationProperties.AccessibilityView="Raw"
                            VerticalAlignment="Center" />
 
                 <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                    <TextBlock x:Uid="SandboxPage_NodeSandboxIsOn" x:Name="SandboxStatusTitle"
-                               Text="Node sandbox is on"
+                    <TextBlock x:Uid="SandboxPage_Title" x:Name="SandboxStatusTitle"
+                               Text="Node Sandbox"
                                AutomationProperties.AutomationId="SandboxPageMarker"
                                Style="{StaticResource TitleTextBlockStyle}"
                                TextWrapping="Wrap" />
@@ -124,7 +125,7 @@
                 <StackPanel Spacing="6">
                     <TextBlock x:Uid="SandboxPage_SecurityLevel" Text="Security level"
                                Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <TextBlock x:Uid="SandboxPage_PresetHelp" Text="Presets replace file grants and internet access. Clipboard, UI and command approvals stay independent."
+                    <TextBlock x:Uid="SandboxPage_PresetHelp" Text="Presets replace file grants and internet access. Clipboard, limits and command approvals stay independent."
                                TextWrapping="Wrap"
                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <Grid ColumnSpacing="12" Margin="0,8,0,0">
@@ -152,14 +153,15 @@
                                     </Grid.ColumnDefinitions>
                                     <FontIcon x:Name="PresetStrictIcon"
                                               Glyph="{x:Bind helpers:FluentIconCatalog.SandboxStrict, Mode=OneTime}"
+                                              Foreground="{ThemeResource SystemFillColorSuccessBrush}"
                                               FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                               FontSize="16" IsTextScaleFactorEnabled="False"
                                               AutomationProperties.AccessibilityView="Raw"
                                               VerticalAlignment="Center" />
                                     <TextBlock x:Uid="SandboxPage_PresetStrict" Grid.Column="1" Text="Strict"
-                                               FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
                                 </Grid>
-                                <TextBlock x:Uid="SandboxPage_PresetStrictText" Text="No personal files or internet. Runtime access and private scratch only."
+                                <TextBlock x:Uid="SandboxPage_PresetStrictText" Text="Keep the agent on a short leash."
                                            TextWrapping="Wrap"
                                            FontSize="13"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -184,14 +186,15 @@
                                     </Grid.ColumnDefinitions>
                                     <FontIcon x:Name="PresetBalancedIcon"
                                               Glyph="{x:Bind helpers:FluentIconCatalog.Permissions, Mode=OneTime}"
+                                              Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                               FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                               FontSize="16" IsTextScaleFactorEnabled="False"
                                               AutomationProperties.AccessibilityView="Raw"
                                               VerticalAlignment="Center" />
-                                    <TextBlock x:Uid="SandboxPage_PresetBalanced" Grid.Column="1" Text="Balanced (Default)"
-                                               FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock x:Uid="SandboxPage_PresetBalanced" Grid.Column="1" Text="Balanced"
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
                                 </Grid>
-                                <TextBlock x:Uid="SandboxPage_PresetBalancedText" Text="Read your profile and resolved redirected personal folders. No personal writes. Internet on. Protected folders excluded."
+                                <TextBlock x:Uid="SandboxPage_PresetBalancedText" Text="Help with everyday tasks, with fewer risks."
                                            TextWrapping="Wrap"
                                            FontSize="13"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -216,14 +219,15 @@
                                     </Grid.ColumnDefinitions>
                                     <FontIcon x:Name="PresetOpenIcon"
                                               Glyph="{x:Bind helpers:FluentIconCatalog.StatusWarn, Mode=OneTime}"
+                                              Foreground="{ThemeResource SystemFillColorCautionBrush}"
                                               FontFamily="{ThemeResource SymbolThemeFontFamily}"
                                               FontSize="16" IsTextScaleFactorEnabled="False"
                                               AutomationProperties.AccessibilityView="Raw"
                                               VerticalAlignment="Center" />
                                     <TextBlock x:Uid="SandboxPage_PresetOpen" Grid.Column="1" Text="Open"
-                                               FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                               Style="{StaticResource BodyStrongTextBlockStyle}" TextWrapping="Wrap" />
                                 </Grid>
-                                <TextBlock x:Uid="SandboxPage_PresetOpenText" Text="Read and write your profile and resolved redirected personal folders. Internet on. Protected folders excluded."
+                                <TextBlock x:Uid="SandboxPage_PresetOpenText" Text="Give the agent more freedom to get things done."
                                            TextWrapping="Wrap"
                                            FontSize="13"
                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -249,124 +253,70 @@
             <!-- Only confirmed unsupported Windows disables saved sandbox controls. -->
             <ContentControl x:Name="SandboxPermissionsControls" HorizontalContentAlignment="Stretch">
             <StackPanel x:Name="SandboxControlsContainer" Spacing="16">
-                <ComboBox x:Uid="SandboxPage_FileScope" x:Name="ScopeCombo"
-                          Header="File access scope" SelectionChanged="OnScopeChanged"
-                          HorizontalAlignment="Stretch">
-                    <ComboBoxItem x:Uid="SandboxPage_SelectedFolders" Content="Selected folders" Tag="SelectedFolders" />
-                    <ComboBoxItem x:Uid="SandboxPage_UserFilesReadOnly" Content="User folders: read only" Tag="UserFilesReadOnly" />
-                    <ComboBoxItem x:Uid="SandboxPage_UserFilesReadWrite" Content="User folders: read and write" Tag="UserFilesReadWrite" />
-                </ComboBox>
-                <TextBlock x:Name="ScopeDetails" TextWrapping="Wrap"
-                           AutomationProperties.LiveSetting="Polite"
-                           Style="{StaticResource CaptionTextBlockStyle}" />
-
-                <!-- Files (highest privacy risk — appears first) -->
                 <Expander IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                     <Expander.Header>
-                        <TextBlock x:Uid="SandboxPage_Files" Text="📁 Files" Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="📁"
+                                       AutomationProperties.AccessibilityView="Raw"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock x:Uid="SandboxPage_FolderList" Text="Folders"
+                                       Style="{StaticResource BodyStrongTextBlockStyle}"/>
+                        </StackPanel>
                     </Expander.Header>
                     <StackPanel Spacing="12" Padding="4">
-                        <TextBlock x:Uid="SandboxPage_ByDefaultTheAgent" Text="The selected scope controls file access. These rows add folder grants; Use scope keeps that folder's existing scope permissions. Choose Selected folders to limit access to explicit grants. Protected folders remain blocked."
+                        <TextBlock x:Uid="SandboxPage_FolderListHelp"
+                                   Text="Choose what the agent can do in each folder. No access blocks that folder, but explicitly listed subfolders keep their own access. Protected folders stay blocked."
                                    TextWrapping="Wrap"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                        <Grid ColumnSpacing="8" RowSpacing="6">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="160" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock x:Uid="SandboxPage_Documents" Grid.Row="0" Grid.Column="0" Text="Documents" VerticalAlignment="Center"/>
-                            <ComboBox x:Uid="SandboxPage_DocsAccessCombo" x:Name="DocsAccessCombo" Grid.Row="0" Grid.Column="1"
-                                      HorizontalAlignment="Stretch"
-                                      SelectionChanged="OnDocsAccessChanged">
-                                <ComboBoxItem x:Uid="SandboxPage_Blocked" Content="Use scope" Tag="None" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadOnly" Content="Read only" Tag="ReadOnly" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadAmpWrite" Content="Read &amp; write" Tag="ReadWrite" />
-                            </ComboBox>
-
-                            <TextBlock x:Uid="SandboxPage_Downloads" Grid.Row="1" Grid.Column="0" Text="Downloads" VerticalAlignment="Center"/>
-                            <ComboBox x:Uid="SandboxPage_DownloadsAccessCombo" x:Name="DownloadsAccessCombo" Grid.Row="1" Grid.Column="1"
-                                      HorizontalAlignment="Stretch"
-                                      SelectionChanged="OnDownloadsAccessChanged">
-                                <ComboBoxItem x:Uid="SandboxPage_Blocked2" Content="Use scope" Tag="None" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadOnly2" Content="Read only" Tag="ReadOnly" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadAmpWrite2" Content="Read &amp; write" Tag="ReadWrite" />
-                            </ComboBox>
-
-                            <TextBlock x:Uid="SandboxPage_Desktop" Grid.Row="2" Grid.Column="0" Text="Desktop" VerticalAlignment="Center"/>
-                            <ComboBox x:Uid="SandboxPage_DesktopAccessCombo" x:Name="DesktopAccessCombo" Grid.Row="2" Grid.Column="1"
-                                      HorizontalAlignment="Stretch"
-                                      SelectionChanged="OnDesktopAccessChanged">
-                                <ComboBoxItem x:Uid="SandboxPage_Blocked3" Content="Use scope" Tag="None" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadOnly3" Content="Read only" Tag="ReadOnly" />
-                                <ComboBoxItem x:Uid="SandboxPage_ReadAmpWrite3" Content="Read &amp; write" Tag="ReadWrite" />
-                            </ComboBox>
-                        </Grid>
-
+                        <TextBlock x:Name="FolderStatus" TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <ListView x:Name="CustomFoldersList"
+                                  SelectionMode="None"
+                                  HorizontalContentAlignment="Stretch"
+                                  Visibility="Collapsed">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnSpacing="8" Padding="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="4" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding DisplayPath}"
+                                                   TextWrapping="Wrap"
+                                                   VerticalAlignment="Center"
+                                                   ToolTipService.ToolTip="{Binding DisplayPath}" />
+                                            <TextBlock Text="{Binding Detail}" Visibility="{Binding DetailVisibility}"
+                                                   TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <ComboBox x:Uid="SandboxPage_FolderAccess" Grid.Column="1"
+                                                  HorizontalAlignment="Stretch"
+                                                  VerticalAlignment="Center"
+                                                  IsEnabled="{Binding CanEdit}"
+                                                  Loaded="OnFolderAccessLoaded"
+                                                  DataContextChanged="OnFolderAccessDataContextChanged"
+                                                  AutomationProperties.Name="{Binding AccessLabel}"
+                                                  SelectionChanged="OnCustomFolderAccessChanged">
+                                            <ComboBoxItem x:Uid="SandboxPage_NoAccess" Content="No access" />
+                                            <ComboBoxItem x:Uid="SandboxPage_ReadOnly4" Content="Read only" />
+                                            <ComboBoxItem x:Uid="SandboxPage_ReadAmpWrite4" Content="Read &amp; write" />
+                                        </ComboBox>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock x:Uid="SandboxPage_NoCustomFoldersAdded" x:Name="CustomFoldersEmpty"
+                                   Text="No personal folders shared. Add a folder to get started."
+                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <Button x:Uid="SandboxPage_AddFolder" Content="Add folder"
+                                HorizontalAlignment="Left" Click="OnAddCustomFolder" />
                         <TextBlock x:Uid="SandboxPage_ToolDirectoriesOnYour" TextWrapping="Wrap"
-                                   FontSize="11"
+                                   Style="{StaticResource CaptionTextBlockStyle}"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                   Text="Windows runtime folders are available. Other tools must be inside the selected scope or an explicitly granted folder. Being on PATH does not grant file access." />
-
-                        <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                                BorderThickness="1"
-                                CornerRadius="6"
-                                Padding="8">
-                            <StackPanel Spacing="8">
-                                <TextBlock x:Uid="SandboxPage_CustomFolders" Text="Custom folders" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                                <TextBlock x:Uid="SandboxPage_CustomGrantsAreAdded" Text="Custom grants add access to the selected scope. Removing a grant does not block access already allowed by the scope. Protected folders remain blocked."
-                                           TextWrapping="Wrap"
-                                           FontSize="11"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <ListView x:Name="CustomFoldersList"
-                                          MaxHeight="220"
-                                          SelectionMode="None"
-                                          Visibility="Collapsed">
-                                    <ListView.ItemTemplate>
-                                        <DataTemplate>
-                                            <Grid ColumnSpacing="8" Padding="2,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="170"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0"
-                                                           Text="{Binding Path}"
-                                                           TextTrimming="CharacterEllipsis"
-                                                           VerticalAlignment="Center"
-                                                           ToolTipService.ToolTip="{Binding Path}" />
-                                                <ComboBox Grid.Column="1"
-                                                          HorizontalAlignment="Stretch"
-                                                          SelectedIndex="{Binding AccessIndex, Mode=TwoWay}"
-                                                          SelectionChanged="OnCustomFolderAccessChanged"
-                                                          Tag="{Binding Path}">
-                                                    <ComboBoxItem x:Uid="SandboxPage_Blocked4" Content="Remove grant" />
-                                                    <ComboBoxItem x:Uid="SandboxPage_ReadOnly4" Content="Read only" />
-                                                    <ComboBoxItem x:Uid="SandboxPage_ReadAmpWrite4" Content="Read &amp; write" />
-                                                </ComboBox>
-                                                <Button Grid.Column="2" Content="✕" Tag="{Binding Path}"
-                                                        Click="OnRemoveCustomFolder"
-                                                        Padding="6,2" MinWidth="0" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ListView.ItemTemplate>
-                                </ListView>
-                                <TextBlock x:Uid="SandboxPage_NoCustomFoldersAdded" x:Name="CustomFoldersEmpty"
-                                           Text="No custom folders added."
-                                           FontSize="12"
-                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Button x:Uid="SandboxPage_AddFolder" Content="Add folder" Click="OnAddCustomFolder" />
-                                </StackPanel>
-                            </StackPanel>
-                        </Border>
+                                   Text="Windows runtime folders and private scratch space remain available. Being on PATH does not grant access. Reapply a preset to reset folder choices." />
                     </StackPanel>
                 </Expander>
 
@@ -405,36 +355,6 @@
                                    TextWrapping="Wrap"
                                    FontSize="11"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                </Expander>
-
-                <!-- Windows UI system calls -->
-                <Expander IsExpanded="True" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-                    <Expander.Header>
-                        <TextBlock x:Uid="SandboxPage_CommandCompatibility"
-                                   Text="🪟 Command compatibility"
-                                   Style="{StaticResource BodyStrongTextBlockStyle}" />
-                    </Expander.Header>
-                    <StackPanel Spacing="12" Padding="4">
-                        <ToggleSwitch x:Uid="SandboxPage_AllowWindowsUi"
-                                      x:Name="WindowsUiToggle"
-                                      AutomationProperties.AutomationId="SandboxWindowsUiToggle"
-                                      AutomationProperties.Name="Allow Windows UI APIs for sandboxed commands"
-                                      Header="Allow Windows UI APIs"
-                                      OffContent="Off: blocks Win32k system calls"
-                                      OnContent="On: PowerShell and similar tools can start"
-                                      Toggled="OnWindowsUiToggled" />
-                        <TextBlock x:Uid="SandboxPage_WindowsUiCompatibilityDescription"
-                                   Text="PowerShell (all versions) and some console tools use Windows UI APIs during startup. This setting does not provide a supported host-wide process inventory."
-                                   TextWrapping="Wrap"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <InfoBar x:Uid="SandboxPage_WindowsUiWarning"
-                                 x:Name="WindowsUiWarningBar"
-                                 IsOpen="False"
-                                 IsClosable="False"
-                                 Severity="Warning"
-                                 Title="Win32k boundary disabled"
-                                 Message="File, network, clipboard, timeout, and command approval controls still apply. Win32k system calls are allowed; clipboard policy and the input-injection denial remain in force." />
                     </StackPanel>
                 </Expander>
 

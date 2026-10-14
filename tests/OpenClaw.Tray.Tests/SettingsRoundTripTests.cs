@@ -6,6 +6,106 @@ namespace OpenClaw.Tray.Tests;
 
 public class SettingsRoundTripTests
 {
+    [Theory]
+    [InlineData("SystemRunAllowWindowsUi", false)]
+    [InlineData("SystemRunAllowWindowsUi", true)]
+    [InlineData("systemrunallowwindowsui", false)]
+    [InlineData("SYSTEMRUNALLOWWINDOWSUI", true)]
+    public void RetiredWindowsUiSetting_IsIgnoredAndNotRewrittenWhileOtherDataSurvives(string name, bool value)
+    {
+        using var temp = new OpenClaw.TestSupport.TempDirectory();
+        var path = temp.Combine("settings.json");
+        var expected = new SettingsData
+        {
+            SystemRunFilesystemScope = SystemRunFilesystemScope.SelectedFolders,
+            SystemRunAllowOutbound = true,
+            SandboxClipboard = SandboxClipboardMode.Write,
+            SandboxDocumentsAccess = SandboxFolderAccess.NoAccess,
+            SandboxDownloadsAccess = SandboxFolderAccess.ReadOnly,
+            SandboxDesktopAccess = SandboxFolderAccess.ReadWrite,
+            SandboxCustomFolders = [new() { Path = temp.Combine("grant"), Access = SandboxFolderAccess.ReadOnly }],
+            SandboxTimeoutMs = 95_000,
+            SandboxMaxOutputBytes = 16 * 1024 * 1024,
+            NodeSystemRunEnabled = false,
+            EnableMcpServer = false,
+        };
+        var input = System.Text.Json.Nodes.JsonNode.Parse(expected.ToJson())!.AsObject();
+        input[name] = value;
+        input["FutureSetting"] = System.Text.Json.Nodes.JsonNode.Parse("""{"enabled":true,"values":[1,"keep",null]}""");
+        var originalJson = input.ToJsonString();
+        File.WriteAllText(path, originalJson);
+
+        var settings = new SettingsManager(temp.Path);
+        Assert.Equal(originalJson, File.ReadAllText(path)); // Loading does not rewrite the profile.
+        Assert.Null(typeof(SettingsData).GetProperty("SystemRunAllowWindowsUi"));
+        Assert.Null(typeof(SettingsManager).GetProperty("SystemRunAllowWindowsUi"));
+        Assert.Equal(OpenClaw.Shared.Mxc.MxcRequestBuilder.Fingerprint(expected), settings.SystemRunPolicyFingerprint);
+        Assert.False(settings.NodeSystemRunEnabled);
+        Assert.False(settings.EnableMcpServer);
+        Assert.DoesNotContain("SystemRunAllowWindowsUi", settings.ToSettingsData().ToJson(), StringComparison.OrdinalIgnoreCase);
+        settings.ShowNotifications = false;
+        settings.SaveOrThrow();
+
+        using var saved = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.DoesNotContain(saved.RootElement.EnumerateObject(),
+            property => property.Name.Equals("SystemRunAllowWindowsUi", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(input["FutureSetting"]!.ToJsonString(),
+            System.Text.Json.Nodes.JsonNode.Parse(saved.RootElement.GetProperty("FutureSetting").GetRawText())!.ToJsonString());
+        var reloaded = new SettingsManager(temp.Path);
+        Assert.Equal(OpenClaw.Shared.Mxc.MxcRequestBuilder.Fingerprint(expected), reloaded.SystemRunPolicyFingerprint);
+        Assert.False(reloaded.NodeSystemRunEnabled);
+        Assert.False(reloaded.EnableMcpServer);
+        Assert.False(reloaded.ShowNotifications);
+        reloaded.SaveOrThrow();
+        Assert.DoesNotContain("SystemRunAllowWindowsUi", File.ReadAllText(path), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void NoAccessAndLegacyBlockedRemainDistinctAcrossSettingsManagerReload()
+    {
+        using var temp = new OpenClaw.TestSupport.TempDirectory();
+        var settings = new SettingsManager(temp.Path)
+        {
+            SandboxDocumentsAccess = SandboxFolderAccess.NoAccess,
+            SandboxDownloadsAccess = SandboxFolderAccess.NoAccess,
+            SandboxDesktopAccess = SandboxFolderAccess.Blocked,
+            SandboxCustomFolders =
+            [
+                new() { Path = Path.Combine(temp.Path, "private"), Access = SandboxFolderAccess.NoAccess },
+                new() { Path = Path.Combine(temp.Path, "legacy"), Access = SandboxFolderAccess.Blocked },
+            ],
+        };
+        settings.SaveOrThrow();
+        var reloaded = new SettingsManager(temp.Path);
+        Assert.Equal(SandboxFolderAccess.NoAccess, reloaded.SandboxDocumentsAccess);
+        Assert.Equal(SandboxFolderAccess.NoAccess, reloaded.SandboxDownloadsAccess);
+        Assert.Equal(SandboxFolderAccess.Blocked, reloaded.SandboxDesktopAccess);
+        Assert.Equal(SandboxFolderAccess.NoAccess, reloaded.SandboxCustomFolders[0].Access);
+        Assert.Equal(SandboxFolderAccess.Blocked, reloaded.SandboxCustomFolders[1].Access);
+        Assert.Equal(settings.SnapshotSystemRunSettings().ToJson(), reloaded.SnapshotSystemRunSettings().ToJson());
+    }
+
+    [Fact]
+    public void MissingScopeMigrationDoesNotTurnExplicitNoAccessIntoLegacyQuarantine()
+    {
+        using var temp = new OpenClaw.TestSupport.TempDirectory();
+        File.WriteAllText(Path.Combine(temp.Path, "settings.json"), JsonSerializer.Serialize(new
+        {
+            SandboxDocumentsAccess = SandboxFolderAccess.NoAccess,
+            SandboxDownloadsAccess = SandboxFolderAccess.NoAccess,
+            SandboxDesktopAccess = SandboxFolderAccess.NoAccess,
+            SandboxCustomFolders = new[]
+            {
+                new SandboxCustomFolder { Path = temp.Path, Access = SandboxFolderAccess.NoAccess },
+            },
+        }));
+        var settings = new SettingsManager(temp.Path);
+        Assert.Equal(SandboxFolderAccess.NoAccess, settings.SandboxDocumentsAccess);
+        Assert.Equal(SandboxFolderAccess.NoAccess, settings.SandboxDownloadsAccess);
+        Assert.Equal(SandboxFolderAccess.NoAccess, settings.SandboxDesktopAccess);
+        Assert.Equal(SandboxFolderAccess.NoAccess, Assert.Single(settings.SandboxCustomFolders).Access);
+    }
+
     [Fact]
     public void RoundTrip_AllFields_Preserved()
     {
@@ -69,7 +169,6 @@ public class SettingsRoundTripTests
             ShowCompletedSessions = true,
             SystemRunFilesystemScope = SystemRunFilesystemScope.UserFilesReadOnly,
             SystemRunAllowOutbound = true,
-            SystemRunAllowWindowsUi = true,
             UserRules = new List<UserNotificationRule>
             {
                 new() { Pattern = "build.*fail", IsRegex = true, Category = "urgent", Enabled = true }
@@ -139,7 +238,6 @@ public class SettingsRoundTripTests
         Assert.Equal(original.ShowCompletedSessions, restored.ShowCompletedSessions);
         Assert.Equal(original.SystemRunFilesystemScope, restored.SystemRunFilesystemScope);
         Assert.Equal(original.SystemRunAllowOutbound, restored.SystemRunAllowOutbound);
-        Assert.Equal(original.SystemRunAllowWindowsUi, restored.SystemRunAllowWindowsUi);
         Assert.NotNull(restored.UserRules);
         Assert.Single(restored.UserRules);
         Assert.Equal("build.*fail", restored.UserRules[0].Pattern);
@@ -219,7 +317,6 @@ public class SettingsRoundTripTests
         Assert.False(settings.ShowCompletedSessions);
         Assert.Null(settings.SystemRunFilesystemScope);
         Assert.False(settings.SystemRunAllowOutbound);
-        Assert.False(settings.SystemRunAllowWindowsUi);
         // HubNavPaneOpen defaults to true (NavView starts expanded for new
         // installs and for any settings file that predates the field).
         Assert.True(settings.HubNavPaneOpen);

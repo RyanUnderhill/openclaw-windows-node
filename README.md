@@ -129,7 +129,7 @@ No volume-root grants are emitted, including readonly "metadata" grants. Native
 testing found that those grants allowed unrelated sibling reads on the tested OS.
 Custom supports user-folder readonly access plus selected read/write exceptions.
 
-Presets never bypass approvals. Clipboard, Windows UI and limits remain independent. OpenClaw settings/credentials, SSH, supported browser profiles and PSReadLine roots remain denied. Explicit cwd must already be granted; omitted cwd uses private scratch. Read-only access does not prevent disclosure over an allowed network. Removing policy on exit does not undo file writes.
+Presets never bypass approvals. Clipboard and limits remain independent. Windows UI API compatibility is always available inside MXC so PowerShell and console tools can initialize. Win32k syscall blocking is no longer an option; container desktop isolation, desktop/job restrictions and input-injection denial remain in force. Legacy `SystemRunAllowWindowsUi` values are ignored and omitted on the next settings save, without changing other permissions. This does not enable host fallback. OpenClaw settings/credentials, SSH, supported browser profiles and PSReadLine roots remain denied. Explicit cwd must already be granted; omitted cwd uses private scratch. Read-only access does not prevent disclosure over an allowed network. Removing policy on exit does not undo file writes.
 
 This sandbox covers commands run through the Windows node. Commands run directly on the gateway use the gateway's separate security controls.
 

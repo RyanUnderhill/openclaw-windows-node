@@ -50,7 +50,12 @@ public sealed partial class SandboxPage : Page
             new AppLogger().Warn($"[mxc] operation=ui-probe-failed error={ex.GetType().Name}");
             _availability = new(false, false, false, [L("SandboxPage_ProbeErrorReason")], probeErrored: true);
         }
-        finally { _probeInFlight = false; UpdateStatus(); }
+        finally
+        {
+            _probeInFlight = false;
+            LoadFolders();
+            UpdateStatus();
+        }
     }
 
     private void LoadState()
@@ -59,17 +64,8 @@ public sealed partial class SandboxPage : Page
         _suppress = true;
         try
         {
-            ScopeCombo.SelectedItem = ScopeCombo.Items.OfType<ComboBoxItem>().First(i =>
-                (string)i.Tag == (settings.SystemRunFilesystemScope ?? SystemRunFilesystemScope.SelectedFolders).ToString());
             NetInternetToggle.IsOn = settings.SystemRunAllowOutbound;
-            WindowsUiToggle.IsOn = settings.SystemRunAllowWindowsUi;
-            SelectAccess(DocsAccessCombo, settings.SandboxDocumentsAccess);
-            SelectAccess(DownloadsAccessCombo, settings.SandboxDownloadsAccess);
-            SelectAccess(DesktopAccessCombo, settings.SandboxDesktopAccess);
-            CustomFolders.Clear();
-            foreach (var folder in settings.SandboxCustomFolders)
-                CustomFolders.Add(new(folder.Path, folder.Access));
-            RefreshCustomFoldersUi();
+            LoadFolders();
             (settings.SandboxClipboard switch
             {
                 SandboxClipboardMode.Read => ClipboardReadRadio,
@@ -84,9 +80,13 @@ public sealed partial class SandboxPage : Page
                 i => long.TryParse((string?)i.Tag, out var value) && value == settings.SandboxMaxOutputBytes) ?? MaxOutputCombo.Items[1];
         }
         finally { _suppress = false; }
-        WindowsUiWarningBar.IsOpen = WindowsUiToggle.IsOn;
         UpdatePresetHighlight();
         UpdateStatus();
+    }
+
+    private void UpdateLegacyWarning()
+    {
+        if (CurrentApp.Settings is not { } settings) return;
         PresetCustomFoldersWarning.IsOpen = settings.SandboxCustomFolders.Any(f => f.Access == SandboxFolderAccess.Blocked) ||
             settings.SandboxDocumentsAccess == SandboxFolderAccess.Blocked ||
             settings.SandboxDownloadsAccess == SandboxFolderAccess.Blocked ||
@@ -94,41 +94,37 @@ public sealed partial class SandboxPage : Page
         if (PresetCustomFoldersWarning.IsOpen)
         {
             PresetCustomFoldersWarning.Title = L("SandboxPage_LegacyBlockedTitle");
-            PresetCustomFoldersWarning.Message = L("SandboxPage_LegacyBlockedText");
+            PresetCustomFoldersWarning.Message = L("SandboxPage_LegacyFolderReview");
         }
     }
 
     private void UpdateStatus()
     {
-        var userFiles = CurrentApp.Settings?.SystemRunFilesystemScope is SystemRunFilesystemScope.UserFilesReadOnly or SystemRunFilesystemScope.UserFilesReadWrite;
+        var scope = CurrentApp.Settings?.SystemRunFilesystemScope;
+        var userFiles = scope is SystemRunFilesystemScope.UserFilesReadOnly or SystemRunFilesystemScope.UserFilesReadWrite;
         var unsupported = _availability?.IsWindowsUnsupported == true;
         var resolutionFailed = userFiles && _folderContext?.UserFolders.Any(f => f.Error is not null) == true;
         if (unsupported)
         {
-            SandboxStatusTitle.Text = L("SandboxPage_WindowsCompatibilityTitle");
             SandboxStatusSubtext.Text = L("SandboxPage_WindowsCompatibilityText");
         }
         else if (resolutionFailed)
         {
-            SandboxStatusTitle.Text = L("SandboxPage_ScopeResolutionBlockedTitle");
             SandboxStatusSubtext.Text = L("SandboxPage_ScopeResolutionBlockedText");
         }
         else
         {
-            SandboxStatusTitle.Text = L(_availability is null ? "SandboxPage_CheckingTitle" :
-                _availability.CanRunSystemRunSandbox ? "SandboxPage_StatusOnTitle" : "SandboxPage_StatusUnavailableBlockedTitle");
             SandboxStatusSubtext.Text = L(_availability is null ? "SandboxPage_CheckingText" :
                 _availability.CanRunSystemRunSandbox ? "SandboxPage_StatusOnSubtext" : "SandboxPage_StatusUnavailableBlockedSubtext");
         }
-        ScopeDetails.Visibility = userFiles ? Visibility.Visible : Visibility.Collapsed;
-        ScopeDetails.Text = _folderContext is null ? L("SandboxPage_CheckingUserFolders") :
-            L("SandboxPage_IncludedUserFolders") + "\n" +
-            string.Join("\n", _folderContext.UserFolders.Where(f => f.Path is not null).Select(f => f.Path)) +
-            (_folderContext.UserFolders.Any(f => f.Name == "OneDrive" && f.Path is null && f.Error is null)
-                ? "\n" + L("SandboxPage_OneDriveNotIncluded") : "") +
-            string.Join("", _folderContext.UserFolders.Where(f => f.Error is not null)
-                .Select(f => "\n" + f.Name + ": " + f.Error));
+        FolderStatus.Text = _folderContext is null
+            ? L(_availability is null ? "SandboxPage_CheckingUserFolders" : "SandboxPage_FolderUnavailable")
+            : userFiles && _folderContext.UserFolders.Any(f => f.Name == "OneDrive" && f.Path is null && f.Error is null)
+                ? L("SandboxPage_OneDriveNotIncluded") : "";
+        FolderStatus.Visibility = FolderStatus.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         UnavailableActionBar.IsOpen = unsupported || resolutionFailed || _availability is { CanRunSystemRunSandbox: false };
+        UnavailableActionBar.Title = L(unsupported ? "SandboxPage_WindowsCompatibilityTitle" :
+            resolutionFailed ? "SandboxPage_ScopeResolutionBlockedTitle" : "SandboxPage_SandboxUnavailable.Title");
         UnavailableActionMessage.Text = unsupported ? L("SandboxPage_WindowsCompatibilityText") :
             resolutionFailed ? L("SandboxPage_ScopeResolutionBlockedText") :
             string.Join(" ", _availability?.SystemRunSandboxUnsupportedReasons ?? []);
@@ -186,9 +182,9 @@ public sealed partial class SandboxPage : Page
         var dialog = new ContentDialog
         {
             Title = L($"SandboxPage_Preset{preset}.Text"),
-            Content = L($"SandboxPage_Preset{preset}Text.Text") + "\n\n" + L("SandboxPage_PresetHelp.Text"),
+            Content = L($"SandboxPage_Preset{preset}Details") + "\n\n" + L("SandboxPage_PresetHelp.Text"),
             PrimaryButtonText = L("SandboxPage_ApplyPreset"),
-            CloseButtonText = L("SandboxPage_AllowWindowsUiDialogCancel"),
+            CloseButtonText = L("CancelButton.Content"),
             DefaultButton = ContentDialogButton.Close,
             XamlRoot = XamlRoot,
         };
@@ -231,13 +227,6 @@ public sealed partial class SandboxPage : Page
         VisualStateManager.GoToState(button, "Normal", false);
     }
 
-    private static void SelectAccess(ComboBox combo, SandboxFolderAccess? access) =>
-        combo.SelectedItem = combo.Items.OfType<ComboBoxItem>().First(i => (string)i.Tag ==
-            (access is SandboxFolderAccess.ReadOnly or SandboxFolderAccess.ReadWrite ? access.ToString() : "None"));
-
-    private static SandboxFolderAccess? ReadAccess(ComboBox combo) =>
-        Enum.TryParse<SandboxFolderAccess>((string?)((ComboBoxItem?)combo.SelectedItem)?.Tag, out var access) ? access : null;
-
     private void Save()
     {
         if (_suppress || CurrentApp.Settings is not { } settings) return;
@@ -248,13 +237,6 @@ public sealed partial class SandboxPage : Page
         UpdateStatus();
     }
 
-    private void OnScopeChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppress || CurrentApp.Settings is not { } settings) return;
-        if (Enum.TryParse<SystemRunFilesystemScope>((string?)((ComboBoxItem?)ScopeCombo.SelectedItem)?.Tag, out var scope))
-        { settings.SystemRunFilesystemScope = scope; Save(); }
-    }
-
     private void OnNetInternetToggled(object sender, RoutedEventArgs e)
     {
         if (_suppress || CurrentApp.Settings is not { } settings) return;
@@ -262,61 +244,28 @@ public sealed partial class SandboxPage : Page
         Save();
     }
 
-    private void OnWindowsUiToggled(object sender, RoutedEventArgs e) =>
-        AsyncEventHandlerGuard.Run(OnWindowsUiToggledAsync, new AppLogger(), nameof(OnWindowsUiToggled));
-
-    private async Task OnWindowsUiToggledAsync()
+    private void LoadFolders()
     {
-        if (_suppress || CurrentApp.Settings is not { } settings) return;
-        var value = WindowsUiToggle.IsOn;
-        if (value && !settings.SystemRunAllowWindowsUi)
-        {
-            if (_dialogOpen) { RestoreWindowsUi(false); return; }
-            var dialog = new ContentDialog
-            {
-                Title = L("SandboxPage_AllowWindowsUiDialogTitle"),
-                Content = L("SandboxPage_AllowWindowsUiDialogContent"),
-                PrimaryButtonText = L("SandboxPage_AllowWindowsUiDialogPrimary"),
-                CloseButtonText = L("SandboxPage_AllowWindowsUiDialogCancel"),
-                DefaultButton = ContentDialogButton.Close, XamlRoot = XamlRoot,
-            };
-            _dialogOpen = true;
-            try { if (await dialog.ShowAsync() != ContentDialogResult.Primary) { RestoreWindowsUi(false); return; } }
-            catch (System.Runtime.InteropServices.COMException) { RestoreWindowsUi(false); return; }
-            finally { _dialogOpen = false; }
-        }
-        settings.SystemRunAllowWindowsUi = value;
-        WindowsUiWarningBar.IsOpen = value;
-        Save();
-    }
-
-    private void RestoreWindowsUi(bool value)
-    {
+        if (CurrentApp.Settings is not { } settings) return;
+        var wasSuppressed = _suppress;
         _suppress = true;
-        try { WindowsUiToggle.IsOn = value; }
-        finally { _suppress = false; }
-        WindowsUiWarningBar.IsOpen = value;
+        try
+        {
+            CustomFolders.Clear();
+            foreach (var folder in MxcFolderPermissions.Resolve(settings.SnapshotSystemRunSettings(), _folderContext))
+                CustomFolders.Add(new(folder));
+            RefreshCustomFoldersUi();
+        }
+        finally { _suppress = wasSuppressed; }
     }
 
-    private void OnDocsAccessChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppress || CurrentApp.Settings is not { } settings) return;
-        settings.SandboxDocumentsAccess = ReadAccess(DocsAccessCombo); Save();
-    }
-    private void OnDownloadsAccessChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppress || CurrentApp.Settings is not { } settings) return;
-        settings.SandboxDownloadsAccess = ReadAccess(DownloadsAccessCombo); Save();
-    }
-    private void OnDesktopAccessChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_suppress || CurrentApp.Settings is not { } settings) return;
-        settings.SandboxDesktopAccess = ReadAccess(DesktopAccessCombo); Save();
-    }
     private void RefreshCustomFoldersUi()
     {
         CustomFoldersList.Visibility = CustomFolders.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-        CustomFoldersEmpty.Visibility = CustomFolders.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var pendingPreset = _folderContext is null && CurrentApp.Settings?.SystemRunFilesystemScope is
+            SystemRunFilesystemScope.UserFilesReadOnly or SystemRunFilesystemScope.UserFilesReadWrite;
+        CustomFoldersEmpty.Visibility = CustomFolders.Count == 0 && !pendingPreset ? Visibility.Visible : Visibility.Collapsed;
+        UpdateLegacyWarning();
     }
     private void OnAddCustomFolder(object sender, RoutedEventArgs e) =>
         AsyncEventHandlerGuard.Run(PickCustomFolderAsync, new AppLogger(), nameof(OnAddCustomFolder));
@@ -327,43 +276,62 @@ public sealed partial class SandboxPage : Page
         picker.FileTypeFilter.Add("*");
         InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
         var folder = await picker.PickSingleFolderAsync();
-        if (folder is null || CustomFolders.Any(f => f.Path.Equals(folder.Path, StringComparison.OrdinalIgnoreCase))) return;
-        CustomFolders.Add(new(folder.Path, SandboxFolderAccess.ReadOnly));
+        if (folder is null) return;
+        var existing = CustomFolders.FirstOrDefault(f => MxcFolderPermissions.SamePath(f.Permission.Path, folder.Path));
+        if (existing is not null)
+        {
+            CustomFoldersList.ScrollIntoView(existing);
+            CustomFoldersList.Focus(FocusState.Programmatic);
+            return;
+        }
         if (CurrentApp.Settings is { } settings)
             settings.SandboxCustomFolders = settings.SandboxCustomFolders.Append(
                 new SandboxCustomFolder { Path = folder.Path, Access = SandboxFolderAccess.ReadOnly }).ToList();
-        RefreshCustomFoldersUi();
         Save();
+        LoadFolders();
     }
+
+    private void OnFolderAccessLoaded(object sender, RoutedEventArgs e) => InitializeFolderAccess((ComboBox)sender);
+    private void OnFolderAccessDataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args) =>
+        InitializeFolderAccess((ComboBox)sender);
+
+    private static void InitializeFolderAccess(ComboBox combo)
+    {
+        // Tag identifies the initialized container, including virtualized/recycled rows.
+        combo.Tag = null;
+        combo.SelectedIndex = combo.DataContext is CustomFolderRow row ? row.AccessIndex : -1;
+        combo.Tag = combo.DataContext;
+    }
+
     private void OnCustomFolderAccessChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_suppress || sender is not ComboBox combo || combo.DataContext is not CustomFolderRow row ||
-            CurrentApp.Settings is not { } settings) return;
-        if (!row.InitialSelectionFired) { row.InitialSelectionFired = true; return; }
-        var folders = settings.SandboxCustomFolders;
-        if (combo.SelectedIndex == 0)
+        if (_suppress || sender is not ComboBox combo || !combo.IsLoaded ||
+            combo.DataContext is not CustomFolderRow row || !ReferenceEquals(combo.Tag, row)) return;
+        if (combo.SelectedIndex is < 0 or > 2 ||
+            (combo.SelectedIndex == row.AccessIndex && !row.Permission.HasLegacyBlocked)) return;
+        var access = combo.SelectedIndex switch
         {
-            settings.SandboxCustomFolders = folders.Where(f => !f.Path.Equals(row.Path, StringComparison.OrdinalIgnoreCase)).ToList();
-            CustomFolders.Remove(row); RefreshCustomFoldersUi();
-        }
-        else
+            0 => SandboxFolderAccess.NoAccess,
+            1 => SandboxFolderAccess.ReadOnly,
+            _ => SandboxFolderAccess.ReadWrite,
+        };
+        row.AccessIndex = combo.SelectedIndex;
+        // Rebuild only after SelectionChanged unwinds, never remove its live container in the event.
+        DispatcherQueue.TryEnqueue(() =>
         {
-            var access = combo.SelectedIndex == 2 ? SandboxFolderAccess.ReadWrite : SandboxFolderAccess.ReadOnly;
-            settings.SandboxCustomFolders = folders.Where(f => !f.Path.Equals(row.Path, StringComparison.OrdinalIgnoreCase))
-                .Append(new SandboxCustomFolder { Path = row.Path, Access = access }).ToList();
-            row.AccessIndex = combo.SelectedIndex;
-        }
-        Save();
+            if (CustomFolders.Contains(row)) SetFolderAccess(row, access);
+        });
     }
-    private void OnRemoveCustomFolder(object sender, RoutedEventArgs e)
+    private void SetFolderAccess(CustomFolderRow row, SandboxFolderAccess access)
     {
-        if (sender is not Button button || button.Tag is not string path) return;
-        var row = CustomFolders.FirstOrDefault(f => f.Path == path);
-        if (row is not null) CustomFolders.Remove(row);
-        if (CurrentApp.Settings is { } settings)
-            settings.SandboxCustomFolders = settings.SandboxCustomFolders.Where(
-                f => !f.Path.Equals(path, StringComparison.OrdinalIgnoreCase)).ToList();
-        RefreshCustomFoldersUi(); Save();
+        if (CurrentApp.Settings is not { } settings) return;
+        var edited = MxcFolderPermissions.Edit(settings.SnapshotSystemRunSettings(), row.Permission, access);
+        settings.SandboxDocumentsAccess = edited.SandboxDocumentsAccess;
+        settings.SandboxDesktopAccess = edited.SandboxDesktopAccess;
+        settings.SandboxDownloadsAccess = edited.SandboxDownloadsAccess;
+        settings.SandboxCustomFolders = edited.SandboxCustomFolders ?? [];
+        Save();
+        LoadFolders();
     }
     private void OnClipboardChanged(object sender, RoutedEventArgs e)
     {
@@ -386,10 +354,29 @@ public sealed partial class SandboxPage : Page
     }
     public sealed class CustomFolderRow
     {
-        public string Path { get; }
+        public MxcFolderPermission Permission { get; }
+        public string DisplayPath { get; }
+        public string Detail { get; }
+        public Visibility DetailVisibility => Detail.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        public bool CanEdit => Permission.Error is null && Permission.Path.Length > 0 && !Permission.IsRuntime;
+        public string AccessLabel => LocalizationHelper.Format("SandboxPage_FolderAccessFormat", DisplayPath);
         public int AccessIndex { get; set; }
-        public bool InitialSelectionFired { get; set; }
-        public CustomFolderRow(string path, SandboxFolderAccess access)
-        { Path = path; AccessIndex = access == SandboxFolderAccess.ReadWrite ? 2 : access == SandboxFolderAccess.ReadOnly ? 1 : 0; }
+        public CustomFolderRow(MxcFolderPermission permission)
+        {
+            Permission = permission;
+            DisplayPath = permission.KnownFolders.Count == 0 ? permission.Path :
+                string.Join(", ", permission.KnownFolders.Select(name => L($"SandboxPage_{name}.Text"))) + "\n" + permission.Path;
+            Detail = string.Join("\n", new[] {
+                permission.HasLegacyBlocked ? L("SandboxPage_LegacyFolderReview") : null,
+                permission.IsRuntime ? L("SandboxPage_RuntimeFolder") : null, permission.Error,
+            }.Where(s => !string.IsNullOrEmpty(s)));
+            AccessIndex = permission.Access switch
+            {
+                SandboxFolderAccess.NoAccess => 0,
+                SandboxFolderAccess.ReadOnly => 1,
+                SandboxFolderAccess.ReadWrite => 2,
+                _ => -1,
+            };
+        }
     }
 }

@@ -186,8 +186,6 @@ public class SettingsManager
     public string SystemRunPolicyFingerprint => OpenClaw.Shared.Mxc.MxcRequestBuilder.Fingerprint(SnapshotSystemRunSettings());
     /// <summary>When sandboxed, allow system.run commands to reach the public internet. Default false.</summary>
     public bool SystemRunAllowOutbound { get => _data.SystemRunAllowOutbound; set => _data = _data with { SystemRunAllowOutbound = value }; }
-    /// <summary>When sandboxed, allow Windows UI system calls required by PowerShell and some console utilities. Default false.</summary>
-    public bool SystemRunAllowWindowsUi { get => _data.SystemRunAllowWindowsUi; set => _data = _data with { SystemRunAllowWindowsUi = value }; }
     // ── MXC sandbox: additional knobs (Sandbox page) ─────────────────
     public SandboxClipboardMode SandboxClipboard { get => _data.SandboxClipboard; set => _data = _data with { SandboxClipboard = value }; }
     public SandboxFolderAccess? SandboxDocumentsAccess { get => _data.SandboxDocumentsAccess; set => _data = _data with { SandboxDocumentsAccess = value, SystemRunFilesystemScope = _data.SystemRunFilesystemScope ?? OpenClaw.Shared.SystemRunFilesystemScope.SelectedFolders }; }
@@ -333,7 +331,6 @@ public class SettingsManager
         PreferredGatewayId = null,
         SystemRunFilesystemScope = null,
         SystemRunAllowOutbound = false,
-        SystemRunAllowWindowsUi = false,
         SandboxClipboard = SandboxClipboardMode.None,
         SandboxDocumentsAccess = null,
         SandboxDownloadsAccess = null,
@@ -392,11 +389,12 @@ public class SettingsManager
         if (legacyScope)
         {
             foreach (var folder in data.SandboxCustomFolders ?? [])
-                if (OpenClaw.Shared.Mxc.MxcRequestBuilder.LegacyGrantWasFiltered(folder.Path, _settingsDirectory))
+                if (folder.Access != SandboxFolderAccess.NoAccess &&
+                    OpenClaw.Shared.Mxc.MxcRequestBuilder.LegacyGrantWasFiltered(folder.Path, _settingsDirectory))
                     folder.Access = SandboxFolderAccess.Blocked;
             data.SandboxDocumentsAccess = PreserveLegacyFolder(Environment.SpecialFolder.MyDocuments, data.SandboxDocumentsAccess);
             data.SandboxDesktopAccess = PreserveLegacyFolder(Environment.SpecialFolder.Desktop, data.SandboxDesktopAccess);
-            if (data.SandboxDownloadsAccess is not null)
+            if (data.SandboxDownloadsAccess is not null and not SandboxFolderAccess.NoAccess)
             {
                 try
                 {
@@ -410,7 +408,7 @@ public class SettingsManager
         }
 
         SandboxFolderAccess? PreserveLegacyFolder(Environment.SpecialFolder folder, SandboxFolderAccess? access) =>
-            access is not null && OpenClaw.Shared.Mxc.MxcRequestBuilder.LegacyGrantWasFiltered(
+            access is not null and not SandboxFolderAccess.NoAccess && OpenClaw.Shared.Mxc.MxcRequestBuilder.LegacyGrantWasFiltered(
                 Environment.GetFolderPath(folder), _settingsDirectory) ? SandboxFolderAccess.Blocked : access;
 
         // Legacy McpOnlyMode migration:
@@ -603,6 +601,7 @@ public class SettingsManager
                             !property.Name.Equals("Token", StringComparison.OrdinalIgnoreCase) &&
                             !property.Name.Equals("BootstrapToken", StringComparison.OrdinalIgnoreCase) &&
                             !property.Name.Equals("SystemRunSandboxEnabled", StringComparison.OrdinalIgnoreCase) &&
+                            !property.Name.Equals("SystemRunAllowWindowsUi", StringComparison.OrdinalIgnoreCase) &&
                             !property.Name.Equals("SystemRunBlockHostFallbackWhenMxcUnavailable", StringComparison.OrdinalIgnoreCase))
                             output[property.Name] = System.Text.Json.Nodes.JsonNode.Parse(property.Value.GetRawText());
                     json = output.ToJsonString(new JsonSerializerOptions { WriteIndented = true });

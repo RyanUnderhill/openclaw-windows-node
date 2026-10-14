@@ -4593,7 +4593,7 @@
     <value>自訂資料夾授權仍然有效</value>
   </data>
   <data name="SandboxPage_Files.Text" xml:space="preserve">
-    <value>📁 檔案</value>
+    <value>檔案存取</value>
   </data>
   <data name="SandboxPage_ByDefaultTheAgent.Text" xml:space="preserve">
     <value>所選範圍決定檔案存取權限。這些選項新增資料夾授權；使用範圍保留資料夾既有的範圍權限。選擇「所選資料夾」可將存取限制為明確授權的資料夾。受保護的資料夾一律封鎖。</value>
@@ -4635,13 +4635,13 @@
     <value>讀取與寫入</value>
   </data>
   <data name="SandboxPage_ToolDirectoriesOnYour.Text" xml:space="preserve">
-    <value>Windows 執行階段資料夾可供使用。其他工具必須位於所選範圍或明確授權的資料夾內。出現在 PATH 中不會授予檔案存取權限。</value>
+    <value>Windows 執行階段資料夾和私人工作空間仍可用。出現在 PATH 中不會授予存取權限。重新套用預設可重設資料夾選項。</value>
   </data>
   <data name="SandboxPage_CustomFolders.Text" xml:space="preserve">
-    <value>自訂資料夾</value>
+    <value>額外資料夾</value>
   </data>
   <data name="SandboxPage_CustomGrantsAreAdded.Text" xml:space="preserve">
-    <value>自訂授權會向所選範圍新增存取權限。移除授權不會封鎖範圍已允許的存取。受保護的資料夾一律封鎖。</value>
+    <value>這些權限補充上述檔案存取權限。唯讀或移除授權不會限制預設或其他資料夾已允許的存取。受保護的資料夾仍遭封鎖。</value>
   </data>
   <data name="SandboxPage_Blocked4.Content" xml:space="preserve">
     <value>移除授權</value>
@@ -4653,7 +4653,7 @@
     <value>讀取與寫入</value>
   </data>
   <data name="SandboxPage_NoCustomFoldersAdded.Text" xml:space="preserve">
-    <value>尚未新增自訂資料夾。</value>
+    <value>未共用個人資料夾。新增資料夾即可開始。</value>
   </data>
   <data name="SandboxPage_AddFolder.Content" xml:space="preserve">
     <value>新增資料夾</value>
@@ -4687,42 +4687,6 @@
   </data>
   <data name="SandboxPage_LocalNetworkDevicesAnd.Text" xml:space="preserve">
     <value>尚未包含本機網路裝置與共用。</value>
-  </data>
-  <data name="SandboxPage_CommandCompatibility.Text" xml:space="preserve">
-    <value>🪟 命令相容性</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.Header" xml:space="preserve">
-    <value>允許 Windows UI API</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OffContent" xml:space="preserve">
-    <value>關閉：封鎖 Win32k 系統呼叫</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OnContent" xml:space="preserve">
-    <value>開啟：PowerShell 和類似工具可以啟動</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
-    <value>允許沙箱命令使用 Windows UI API</value>
-  </data>
-  <data name="SandboxPage_WindowsUiCompatibilityDescription.Text" xml:space="preserve">
-    <value>PowerShell（所有版本）和某些主控台工具在啟動時會使用 Windows UI API。此設定不提供受支援的完整主機處理程序清單。</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Title" xml:space="preserve">
-    <value>Win32k 邊界已停用</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Message" xml:space="preserve">
-    <value>檔案、網路、剪貼簿、逾時和命令核准控制仍然有效。允許使用 Win32k 系統呼叫；剪貼簿原則和輸入插入禁止仍然有效。</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogTitle" xml:space="preserve">
-    <value>允許 Windows UI API？</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogContent" xml:space="preserve">
-    <value>這將允許沙箱命令使用 Windows UI 系統呼叫。目前 MXC 版本中的 PowerShell（所有版本）和某些主控台工具需要此權限才能啟動。此設定不會授與受支援的完整主機處理程序清單：CIM/WMI 主機列舉不受支援，且已觀察到失敗；tasklist 可能失敗或逾時；Get-Process 的輸出不應視為完整清單或處理程序中繼資料的保密邊界。&#xA;&#xA;檔案、網路、剪貼簿、逾時和命令核准控制仍然有效，但 Win32k 系統呼叫封鎖將會停用。剪貼簿原則和輸入插入禁止仍然有效。僅在需要更廣泛的命令相容性時啟用。</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogPrimary" xml:space="preserve">
-    <value>允許 UI API</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogCancel" xml:space="preserve">
-    <value>取消</value>
   </data>
   <data name="SandboxPage_Limits.Text" xml:space="preserve">
     <value>⏱ 限制</value>
@@ -7924,15 +7888,39 @@
   <data name="ChatPage_SetupCheckAgain.Content" xml:space="preserve">
     <value>再次檢查</value>
   </data>
-  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>預設會取代檔案授權及網際網路存取。剪貼簿、Windows 介面及命令核准保持獨立。</value></data>
+  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>預設會取代檔案授權及網際網路存取。剪貼簿、限制及命令核准保持獨立。</value></data>
   <data name="SandboxPage_CustomPreset.Text" xml:space="preserve"><value>自訂權限</value></data>
   <data name="SandboxPage_ApplyPreset" xml:space="preserve"><value>套用預設</value></data>
   <data name="SandboxPage_PresetStrict.Text" xml:space="preserve"><value>嚴格</value></data>
-  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>平衡（預設）</value></data>
+  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>平衡</value></data>
+  <data name="SandboxPage_Title.Text" xml:space="preserve"><value>Node Sandbox</value></data>
+  <data name="SandboxPage_ResolvedFolders.Header" xml:space="preserve"><value>包含的資料夾</value></data>
+  <data name="SandboxPage_FileAccessReadOnly" xml:space="preserve"><value>可讀取您的使用者設定檔目錄和個人資料夾，包括重新導向的資料夾。下方的額外權限也可能允許變更。受保護的資料夾仍遭封鎖。</value></data>
+  <data name="SandboxPage_FileAccessReadWrite" xml:space="preserve"><value>程式可讀取和變更您的使用者設定檔目錄和個人資料夾中的檔案，包括重新導向的資料夾。受保護的資料夾仍遭封鎖。</value></data>
+  <data name="SandboxPage_FileAccessSelected" xml:space="preserve"><value>個人檔案存取僅來自下方的額外權限。Windows 執行階段資料夾和私人工作空間仍可用。受保護的資料夾仍遭封鎖。</value></data>
+  <data name="SandboxPage_SavedFolderFormat" xml:space="preserve"><value>{0}（已儲存權限）：{1}</value></data>
+  <data name="SandboxPage_FolderUnavailable" xml:space="preserve"><value>資料夾位置無法使用</value></data>
+  <data name="SandboxPage_FolderAccessFormat" xml:space="preserve"><value>{0} 的存取權限</value></data>
+  <data name="SandboxPage_RemoveFolderFormat" xml:space="preserve"><value>移除 {0} 的權限</value></data>
+  <data name="SandboxPage_FolderList.Text" xml:space="preserve"><value>資料夾</value></data>
+  <data name="SandboxPage_FolderListHelp.Text" xml:space="preserve"><value>選擇代理程式在每個資料夾中可執行的操作。「禁止存取」會封鎖該資料夾，但明確列出的子資料夾保留各自的存取權限。受保護的資料夾仍遭封鎖。</value></data>
+  <data name="SandboxPage_NoAccess.Content" xml:space="preserve"><value>禁止存取</value></data>
+  <data name="SandboxPage_Profile.Text" xml:space="preserve"><value>使用者設定檔目錄</value></data>
+  <data name="SandboxPage_OneDrive.Text" xml:space="preserve"><value>OneDrive</value></data>
+  <data name="SandboxPage_FolderAccess.PlaceholderText" xml:space="preserve"><value>選擇存取權限</value></data>
+  <data name="SandboxPage_ResetFolder" xml:space="preserve"><value>重設</value></data>
+  <data name="SandboxPage_RemoveFolder" xml:space="preserve"><value>移除</value></data>
+  <data name="SandboxPage_ResetFolderFormat" xml:space="preserve"><value>將 {0} 重設為預設存取權限</value></data>
+  <data name="SandboxPage_LegacyFolderReview" xml:space="preserve"><value>已儲存的封鎖權限需要檢查。它不會拒絕預設或父資料夾允許的存取。</value></data>
+  <data name="SandboxPage_RuntimeFolder" xml:space="preserve"><value>Windows 執行階段存取固定為唯讀。</value></data>
+  <data name="SandboxPage_LegacyFolderAccess.Content" xml:space="preserve"><value>舊版封鎖（需檢查）</value></data>
   <data name="SandboxPage_PresetOpen.Text" xml:space="preserve"><value>開放</value></data>
-  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>不存取個人檔案或網際網路。僅允許執行階段存取及私有工作目錄。</value></data>
-  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>讀取使用者設定目錄及已解析的重新導向個人資料夾。不寫入個人檔案。網際網路開啟。排除受保護資料夾。</value></data>
-  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>讀寫使用者設定目錄及已解析的重新導向個人資料夾。網際網路開啟。排除受保護資料夾。</value></data>
+  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>嚴格限制代理程式的行動範圍。</value></data>
+  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>協助處理日常工作，降低風險。</value></data>
+  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>給予代理程式更多自由來完成工作。</value></data>
+  <data name="SandboxPage_PresetStrictDetails" xml:space="preserve"><value>不存取個人檔案或網際網路。僅允許執行階段存取及私有工作目錄。</value></data>
+  <data name="SandboxPage_PresetBalancedDetails" xml:space="preserve"><value>讀取使用者設定目錄及已解析的重新導向個人資料夾。不寫入個人檔案。網際網路開啟。排除受保護資料夾。</value></data>
+  <data name="SandboxPage_PresetOpenDetails" xml:space="preserve"><value>讀寫使用者設定目錄及已解析的重新導向個人資料夾。網際網路開啟。排除受保護資料夾。</value></data>
   <data name="SandboxPage_FileScope.Header" xml:space="preserve"><value>檔案存取範圍</value></data>
   <data name="SandboxPage_SelectedFolders.Content" xml:space="preserve"><value>選取的資料夾</value></data>
   <data name="SandboxPage_UserFilesReadOnly.Content" xml:space="preserve"><value>使用者資料夾：唯讀</value></data>
@@ -7940,7 +7928,7 @@
   <data name="SandboxPage_CheckingTitle" xml:space="preserve"><value>正在檢查 MXC 可用性</value></data>
   <data name="SandboxPage_CheckingText" xml:space="preserve"><value>正在驗證命令隔離支援。此檢查不會變更權限。</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>使用者資料夾解析不完整</value></data>
-  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>所需使用者資料夾無法解析或存取。此範圍的命令遭封鎖。請檢查列出的位置、重試，或選擇「選取的資料夾」並授權可用的非根目錄位置。受保護根目錄與核准始終適用。</value></data>
+  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>找不到或無法存取所需的個人資料夾。使用這些資料夾的命令遭封鎖。請查看資料夾清單，還原資料夾的 Windows 位置，然後重試。受保護資料夾與命令核准始終適用。</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>命令逾時：{0} 秒</value></data>
   <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>命令檔案權限</value></data>
   <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>新的隔離設定：嚴格不授權個人檔案，關閉網際網路。平衡讀取使用者設定目錄及已解析的「文件」「桌面」「下載」與可用 OneDrive 資料夾，不寫入個人檔案。開放讀寫相同範圍。平衡/開放開啟網際網路。不包括其他使用者與整個磁碟機。範圍之外的專案需明確自訂授權。受保護資料夾在隔離時適用，命令核准始終有效。已確認不支援隔離的 Windows 將顯示警告、停用沙箱控制項並使用未隔離執行。除非明確重新套用預設，否則保留現有 Custom 設定。剪貼簿與 Windows 介面保持獨立。Node Sandbox 顯示已解析位置與錯誤。</value></data>

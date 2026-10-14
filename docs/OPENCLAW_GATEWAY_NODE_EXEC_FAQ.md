@@ -613,7 +613,7 @@ SystemCapability
 The Windows app knows:
 
 - whether MXC is available on this host;
-- local filesystem, network, clipboard, Windows UI API, timeout, and output policies;
+- local filesystem, network, clipboard, desktop isolation, input-injection denial, timeout, and output policies;
 - whether the complete policy can run on BaseContainer with native sensitive-root
   denial and without host ACL mutation. It never selects uncontained execution.
 
@@ -680,13 +680,18 @@ fallback-block switches are retired; automatic compatibility does not preserve
 an old explicit fallback-block choice. That upgrade intent requires a separate
 compatibility decision before release readiness is claimed.
 
-MXC also blocks Win32k system calls by default. PowerShell (all versions) and
-some console programs initialize Windows UI APIs even when they do not show a
-window. Enable **Allow Windows UI APIs** on the Node Sandbox page when those
-programs require Win32k compatibility. This keeps filesystem, network,
-clipboard, timeout, and command approval controls in force, but removes the
-Win32k syscall boundary. Clipboard policy and the input-injection denial remain
-in force.
+Windows UI API compatibility is always available inside MXC. PowerShell and
+some console programs initialize these APIs even without showing a window.
+The former **Allow Windows UI APIs** option and its Win32k syscall-blocking
+hardening mode are retired: the SDK request always uses `Ui.Disable=false`.
+Container desktop isolation, desktop/job restrictions, filesystem, network,
+clipboard, timeout, output limits and command approvals remain in force.
+Input injection remains denied. This is not host fallback and does not change
+the positively unsupported Windows compatibility route.
+
+Old `SystemRunAllowWindowsUi` values, including `false`, are ignored on load
+and removed on the next settings save. Unrelated permissions and unknown
+settings fields are preserved. No replacement toggle or confirmation is needed.
 
 Windows UI access is not a process-enumeration permission and does not provide a
 supported host-wide process inventory. In the behavior reported in

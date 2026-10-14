@@ -647,7 +647,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Every system.run uses the official MXC SDK. Unavailable containment blocks execution.
+    /// Composes MXC execution with fresh platform protection. Only unsupported Windows uses host compatibility.
     /// </summary>
     private ICommandRunner BuildSystemRunRunner()
     {
@@ -657,7 +657,8 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
             () => SnapshotSettings(),
             () => settingsDirectory,
             GetOrProbeMxcAvailability,
-            _logger);
+            _logger,
+            contextProvider: () => MxcWindowsRequestContext.Capture(settingsDirectory));
     }
 
     /// <summary>

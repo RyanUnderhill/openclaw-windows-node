@@ -4593,7 +4593,7 @@
     <value>自定义文件夹授权仍然有效</value>
   </data>
   <data name="SandboxPage_Files.Text" xml:space="preserve">
-    <value>📁 文件</value>
+    <value>文件访问</value>
   </data>
   <data name="SandboxPage_ByDefaultTheAgent.Text" xml:space="preserve">
     <value>所选范围决定文件访问权限。这些选项添加文件夹授权；使用范围保留文件夹已有的范围权限。选择“所选文件夹”可将访问限制为明确授权的文件夹。受保护的文件夹始终被阻止。</value>
@@ -4635,13 +4635,13 @@
     <value>读取与写入</value>
   </data>
   <data name="SandboxPage_ToolDirectoriesOnYour.Text" xml:space="preserve">
-    <value>Windows 运行时文件夹可用。其他工具必须位于所选范围或明确授权的文件夹内。出现在 PATH 中不会授予文件访问权限。</value>
+    <value>Windows 运行时文件夹和私有工作区仍可用。出现在 PATH 中不会授予访问权限。重新应用预设可重置文件夹选项。</value>
   </data>
   <data name="SandboxPage_CustomFolders.Text" xml:space="preserve">
-    <value>自定义文件夹</value>
+    <value>附加文件夹</value>
   </data>
   <data name="SandboxPage_CustomGrantsAreAdded.Text" xml:space="preserve">
-    <value>自定义授权向所选范围添加访问权限。删除授权不会阻止范围已允许的访问。受保护的文件夹始终被阻止。</value>
+    <value>这些权限补充上述文件访问权限。只读或删除授权不会限制预设或其他文件夹已允许的访问。受保护的文件夹仍被阻止。</value>
   </data>
   <data name="SandboxPage_Blocked4.Content" xml:space="preserve">
     <value>移除授权</value>
@@ -4653,7 +4653,7 @@
     <value>读取与写入</value>
   </data>
   <data name="SandboxPage_NoCustomFoldersAdded.Text" xml:space="preserve">
-    <value>尚未添加自定义文件夹。</value>
+    <value>未共享个人文件夹。添加文件夹即可开始。</value>
   </data>
   <data name="SandboxPage_AddFolder.Content" xml:space="preserve">
     <value>添加文件夹</value>
@@ -4687,42 +4687,6 @@
   </data>
   <data name="SandboxPage_LocalNetworkDevicesAnd.Text" xml:space="preserve">
     <value>本地网络设备和共享尚未包含在内。</value>
-  </data>
-  <data name="SandboxPage_CommandCompatibility.Text" xml:space="preserve">
-    <value>🪟 命令兼容性</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.Header" xml:space="preserve">
-    <value>允许 Windows UI API</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OffContent" xml:space="preserve">
-    <value>关闭：阻止 Win32k 系统调用</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.OnContent" xml:space="preserve">
-    <value>开启：PowerShell 和类似工具可以启动</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUi.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
-    <value>允许沙盒命令使用 Windows UI API</value>
-  </data>
-  <data name="SandboxPage_WindowsUiCompatibilityDescription.Text" xml:space="preserve">
-    <value>PowerShell（所有版本）和某些控制台工具在启动时会使用 Windows UI API。此设置不提供受支持的完整主机进程清单。</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Title" xml:space="preserve">
-    <value>Win32k 边界已禁用</value>
-  </data>
-  <data name="SandboxPage_WindowsUiWarning.Message" xml:space="preserve">
-    <value>文件、网络、剪贴板、超时和命令审批控制仍然有效。允许使用 Win32k 系统调用；剪贴板策略和输入注入禁令仍然有效。</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogTitle" xml:space="preserve">
-    <value>允许 Windows UI API？</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogContent" xml:space="preserve">
-    <value>这将允许沙盒命令使用 Windows UI 系统调用。当前 MXC 版本中的 PowerShell（所有版本）和某些控制台工具需要此权限才能启动。此设置不会授予受支持的完整主机进程清单：CIM/WMI 主机枚举不受支持，并已观察到失败；tasklist 可能失败或超时；Get-Process 的输出不应被视为完整清单或进程元数据的保密边界。&#xA;&#xA;文件、网络、剪贴板、超时和命令审批控制仍然有效，但 Win32k 系统调用阻止将被禁用。剪贴板策略和输入注入禁令仍然有效。仅在需要更广泛的命令兼容性时启用。</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogPrimary" xml:space="preserve">
-    <value>允许 UI API</value>
-  </data>
-  <data name="SandboxPage_AllowWindowsUiDialogCancel" xml:space="preserve">
-    <value>取消</value>
   </data>
   <data name="SandboxPage_Limits.Text" xml:space="preserve">
     <value>⏱ 限制</value>
@@ -7924,15 +7888,39 @@
   <data name="ChatPage_SetupCheckAgain.Content" xml:space="preserve">
     <value>再次检查</value>
   </data>
-  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>预设会替换文件授权和互联网访问。剪贴板、Windows 界面和命令审批保持独立。</value></data>
+  <data name="SandboxPage_PresetHelp.Text" xml:space="preserve"><value>预设会替换文件授权和互联网访问。剪贴板、限制和命令审批保持独立。</value></data>
   <data name="SandboxPage_CustomPreset.Text" xml:space="preserve"><value>自定义权限</value></data>
   <data name="SandboxPage_ApplyPreset" xml:space="preserve"><value>应用预设</value></data>
   <data name="SandboxPage_PresetStrict.Text" xml:space="preserve"><value>严格</value></data>
-  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>平衡（默认）</value></data>
+  <data name="SandboxPage_PresetBalanced.Text" xml:space="preserve"><value>平衡</value></data>
+  <data name="SandboxPage_Title.Text" xml:space="preserve"><value>Node Sandbox</value></data>
+  <data name="SandboxPage_ResolvedFolders.Header" xml:space="preserve"><value>包含的文件夹</value></data>
+  <data name="SandboxPage_FileAccessReadOnly" xml:space="preserve"><value>可以读取您的用户配置文件目录和个人文件夹，包括重定向文件夹。下方的附加权限也可能允许更改。受保护的文件夹仍被阻止。</value></data>
+  <data name="SandboxPage_FileAccessReadWrite" xml:space="preserve"><value>程序可以读取和更改您的用户配置文件目录和个人文件夹中的文件，包括重定向文件夹。受保护的文件夹仍被阻止。</value></data>
+  <data name="SandboxPage_FileAccessSelected" xml:space="preserve"><value>个人文件访问仅来自下方的附加权限。Windows 运行时文件夹和私有工作区仍可用。受保护的文件夹仍被阻止。</value></data>
+  <data name="SandboxPage_SavedFolderFormat" xml:space="preserve"><value>{0}（已保存权限）：{1}</value></data>
+  <data name="SandboxPage_FolderUnavailable" xml:space="preserve"><value>文件夹位置不可用</value></data>
+  <data name="SandboxPage_FolderAccessFormat" xml:space="preserve"><value>{0} 的访问权限</value></data>
+  <data name="SandboxPage_RemoveFolderFormat" xml:space="preserve"><value>移除 {0} 的权限</value></data>
+  <data name="SandboxPage_FolderList.Text" xml:space="preserve"><value>文件夹</value></data>
+  <data name="SandboxPage_FolderListHelp.Text" xml:space="preserve"><value>选择智能体在每个文件夹中可以执行的操作。“禁止访问”会阻止该文件夹，但明确列出的子文件夹保留各自的访问权限。受保护的文件夹仍被阻止。</value></data>
+  <data name="SandboxPage_NoAccess.Content" xml:space="preserve"><value>禁止访问</value></data>
+  <data name="SandboxPage_Profile.Text" xml:space="preserve"><value>用户配置文件目录</value></data>
+  <data name="SandboxPage_OneDrive.Text" xml:space="preserve"><value>OneDrive</value></data>
+  <data name="SandboxPage_FolderAccess.PlaceholderText" xml:space="preserve"><value>选择访问权限</value></data>
+  <data name="SandboxPage_ResetFolder" xml:space="preserve"><value>重置</value></data>
+  <data name="SandboxPage_RemoveFolder" xml:space="preserve"><value>移除</value></data>
+  <data name="SandboxPage_ResetFolderFormat" xml:space="preserve"><value>将 {0} 重置为预设访问权限</value></data>
+  <data name="SandboxPage_LegacyFolderReview" xml:space="preserve"><value>已保存的阻止权限需要检查。它不会拒绝预设或父文件夹允许的访问。</value></data>
+  <data name="SandboxPage_RuntimeFolder" xml:space="preserve"><value>Windows 运行时访问固定为只读。</value></data>
+  <data name="SandboxPage_LegacyFolderAccess.Content" xml:space="preserve"><value>旧版阻止（需检查）</value></data>
   <data name="SandboxPage_PresetOpen.Text" xml:space="preserve"><value>开放</value></data>
-  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>不访问个人文件或互联网。仅允许运行时访问和私有工作目录。</value></data>
-  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>读取用户配置目录和已解析的重定向个人文件夹。不写入个人文件。互联网开启。排除受保护文件夹。</value></data>
-  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>读写用户配置目录和已解析的重定向个人文件夹。互联网开启。排除受保护文件夹。</value></data>
+  <data name="SandboxPage_PresetStrictText.Text" xml:space="preserve"><value>严格限制智能体的行动范围。</value></data>
+  <data name="SandboxPage_PresetBalancedText.Text" xml:space="preserve"><value>协助处理日常任务，降低风险。</value></data>
+  <data name="SandboxPage_PresetOpenText.Text" xml:space="preserve"><value>给予智能体更多自由来完成任务。</value></data>
+  <data name="SandboxPage_PresetStrictDetails" xml:space="preserve"><value>不访问个人文件或互联网。仅允许运行时访问和私有工作目录。</value></data>
+  <data name="SandboxPage_PresetBalancedDetails" xml:space="preserve"><value>读取用户配置目录和已解析的重定向个人文件夹。不写入个人文件。互联网开启。排除受保护文件夹。</value></data>
+  <data name="SandboxPage_PresetOpenDetails" xml:space="preserve"><value>读写用户配置目录和已解析的重定向个人文件夹。互联网开启。排除受保护文件夹。</value></data>
   <data name="SandboxPage_FileScope.Header" xml:space="preserve"><value>文件访问范围</value></data>
   <data name="SandboxPage_SelectedFolders.Content" xml:space="preserve"><value>选定文件夹</value></data>
   <data name="SandboxPage_UserFilesReadOnly.Content" xml:space="preserve"><value>用户文件夹：只读</value></data>
@@ -7940,7 +7928,7 @@
   <data name="SandboxPage_CheckingTitle" xml:space="preserve"><value>正在检查 MXC 可用性</value></data>
   <data name="SandboxPage_CheckingText" xml:space="preserve"><value>正在验证命令隔离支持。此检查不会更改权限。</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>用户文件夹解析不完整</value></data>
-  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>所需用户文件夹无法解析或访问。此范围的命令被阻止。请检查所列位置、重试，或选择“选定文件夹”并授权可用的非根目录位置。受保护根目录和审批始终适用。</value></data>
+  <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>找不到或无法访问所需的个人文件夹。使用这些文件夹的命令已被阻止。请查看文件夹列表，恢复文件夹的 Windows 位置，然后重试。受保护文件夹和命令审批始终适用。</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>命令超时：{0} 秒</value></data>
   <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>命令文件权限</value></data>
   <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>新的隔离配置：严格不授权个人文件，关闭互联网。平衡读取用户配置目录以及已解析的“文档”“桌面”“下载”和可用 OneDrive 文件夹，不写入个人文件。开放读写相同范围。平衡/开放开启互联网。不包括其他用户和整个驱动器。范围之外的项目需明确自定义授权。受保护文件夹在隔离时适用，命令审批始终有效。已确认不支持隔离的 Windows 将显示警告、禁用沙盒控件并使用未隔离执行。除非明确重新应用预设，否则保留现有 Custom 设置。剪贴板和 Windows 界面保持独立。Node Sandbox 显示已解析位置和错误。</value></data>

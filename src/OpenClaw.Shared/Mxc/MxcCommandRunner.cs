@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Text;
 using Microsoft.Mxc.Sdk.V1;
 using OpenClaw.Shared.Telemetry;
 
@@ -22,6 +21,7 @@ public sealed class MxcCommandRunner : ICommandRunner
     private readonly IOpenClawLogger _logger;
 
     public string Name => "mxc";
+    internal Func<string, MxcFolderAdmission.Metadata?> ReadPhysicalMetadata { get; init; } = MxcFolderAdmission.ReadMetadata;
 
     public MxcCommandRunner(
         Func<SettingsData> settingsProvider,
@@ -41,18 +41,31 @@ public sealed class MxcCommandRunner : ICommandRunner
             request, new SpawnOptions { Telemetry = new TelemetryConfig { Enabled = false } },
             CancellationToken.None).ConfigureAwait(false));
         _probe = probe ?? (request => MxcContainer.Probe(request));
-        _scratchRoot = scratchRoot ?? Path.Combine(
-            Environment.GetEnvironmentVariable("OPENCLAW_TRAY_LOCALAPPDATA_DIR")
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OpenClawMxc", "Runs");
+        _scratchRoot = scratchRoot ?? GetDefaultScratchRoot(
+            Environment.GetEnvironmentVariable("OPENCLAW_TRAY_LOCALAPPDATA_DIR"),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         _logger = logger ?? NullLogger.Instance;
     }
+
+    internal static string GetDefaultScratchRoot(string? overrideRoot, string localAppData) =>
+        Path.Combine(string.IsNullOrWhiteSpace(overrideRoot) ? localAppData : overrideRoot, "OpenClawMxc", "Runs");
 
     public string CapturePolicy() => MxcRequestBuilder.Fingerprint(MxcRequestBuilder.Snapshot(_settings()));
 
     public async Task<CommandResult> RunAsync(CommandRequest request, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
+        const string scratchError = "The MXC scratch directory must use a valid absolute path. " +
+            "Remove or correct OPENCLAW_TRAY_LOCALAPPDATA_DIR and restart OpenClaw.";
+        try
+        {
+            if (!Path.IsPathFullyQualified(_scratchRoot)) return Block(scratchError);
+            _ = Path.GetFullPath(_scratchRoot);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return Block(scratchError);
+        }
         var settings = MxcRequestBuilder.Snapshot(_settings());
         var fingerprint = MxcRequestBuilder.Fingerprint(settings);
         if (request.ExpectedMxcPolicy is not null && request.ExpectedMxcPolicy != fingerprint)
@@ -64,11 +77,13 @@ public sealed class MxcCommandRunner : ICommandRunner
         var stop = new CancellationTokenSource();
         var timeout = EffectiveTimeout(request.TimeoutMs, settings.SandboxTimeoutMs);
         var executionMode = (int)NodeToolExecutionMode.Sandbox;
+        var capture = new CommandOutputCapture(
+            settings.SandboxMaxOutputBytes > 0 ? settings.SandboxMaxOutputBytes : 4 * 1024 * 1024);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         if (timeout > 0) deadline.CancelAfter(timeout);
         var owned = Task.Run(async () =>
         {
-            try { return await ExecuteOwnedAsync(request, settings, fingerprint, stop.Token,
+            try { return await ExecuteOwnedAsync(request, settings, fingerprint, capture, stop.Token,
                 mode => Volatile.Write(ref executionMode, (int)mode)).ConfigureAwait(false); }
             finally
             {
@@ -85,23 +100,20 @@ public sealed class MxcCommandRunner : ICommandRunner
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
+            // Snapshot before termination can overwrite the root's exit status or close native streams.
+            var result = capture.Snapshot((NodeToolExecutionMode)Volatile.Read(ref executionMode), deadlineExpired: true);
             // Do not dispose a late process or its scratch from this waiter. Its owner remains bounded.
             try { stop.Cancel(); }
             catch (ObjectDisposedException) { /* The native owner completed at the cancellation boundary. */ }
             _ = ObserveCleanupAsync(owned);
             ct.ThrowIfCancellationRequested();
-            return new CommandResult
-            {
-                ExitCode = -1, TimedOut = true, DurationMs = stopwatch.ElapsedMilliseconds,
-                Stderr = "The command deadline expired. Owned process termination and cleanup may still be completing.",
-                ExecutionMode = (NodeToolExecutionMode)Volatile.Read(ref executionMode),
-                ErrorCategory = NodeToolErrorCategory.Timeout,
-            };
+            result.DurationMs = stopwatch.ElapsedMilliseconds;
+            return result;
         }
     }
 
     private async Task<CommandResult> ExecuteOwnedAsync(
-        CommandRequest command, SettingsData settings, string fingerprint, CancellationToken stop,
+        CommandRequest command, SettingsData settings, string fingerprint, CommandOutputCapture capture, CancellationToken stop,
         Action<NodeToolExecutionMode> selectMode)
     {
         var scratch = Path.Combine(_scratchRoot, Guid.NewGuid().ToString("N"));
@@ -125,14 +137,16 @@ public sealed class MxcCommandRunner : ICommandRunner
                     return Block("Permissions changed before launch. Retry for a fresh approval.",
                         NodeToolErrorCategory.ExecPolicyDenied, mode);
                 _logger.Warn("[mxc] operation=compatibility executionMode=host reason=windows_unsupported sandboxControlsEnforced=false");
-                return await UnsupportedWindowsCommandExecutor.RunAsync(command, scratch,
-                    settings.SandboxMaxOutputBytes > 0 ? settings.SandboxMaxOutputBytes : 4 * 1024 * 1024,
-                    stop).ConfigureAwait(false);
+                return await UnsupportedWindowsCommandExecutor.RunAsync(command, scratch, capture, stop).ConfigureAwait(false);
             }
             if (!availability.CanRunSystemRunSandbox)
                 return Block(string.Join(" ", availability.SystemRunSandboxUnsupportedReasons), NodeToolErrorCategory.SandboxUnavailable);
             Directory.CreateDirectory(scratch);
-            var request = MxcRequestBuilder.Build(command, settings, _settingsDirectory(), scratch, _context());
+            // Only this newly created, owned directory may be translated for an SDK grant/cwd.
+            // Keep the logical path for cleanup; caller-selected grants and cwd stay fail-closed.
+            var physicalScratch = MxcPhysicalPaths.ResolveDirectory(scratch, ReadPhysicalMetadata, requireExisting: true);
+            var request = MxcRequestBuilder.Build(command, settings, _settingsDirectory(), physicalScratch, _context(),
+                MxcFolderAdmission.ReadMetadata, ReadPhysicalMetadata);
             var admission = _probe(request);
             if (admission.Error is not null || admission.Tier != IsolationTier.BaseContainer ||
                 admission.NeedsDaclAugmentation != false ||
@@ -159,40 +173,54 @@ public sealed class MxcCommandRunner : ICommandRunner
             using var stderr = process.StandardError;
             using var stdoutCloser = process.StandardOutputCloser;
             using var stderrCloser = process.StandardErrorCloser;
-            var budget = settings.SandboxMaxOutputBytes > 0 ? settings.SandboxMaxOutputBytes : 4 * 1024 * 1024;
-            var output = Task.Run(() => CollectAsync(stdout, budget));
-            var error = Task.Run(() => CollectAsync(stderr, budget));
-            var wait = process.WaitAsync(CancellationToken.None);
-            var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var registration = stop.Register(() => cancelled.TrySetResult());
-            var completion = Task.WhenAll((Task)wait, output, error);
-            nativeCompletion = completion;
-            var finished = await Task.WhenAny(completion, cancelled.Task).ConfigureAwait(false);
-            if (stop.IsCancellationRequested || finished == cancelled.Task)
+            var output = Task.Run(() => capture.StandardOutput.Collect(stdout));
+            var error = Task.Run(() => capture.StandardError.Collect(stderr));
+            using var observationStop = CancellationTokenSource.CreateLinkedTokenSource(stop);
+            var rootExit = ObserveRootExitAsync(process, observationStop.Token);
+            capture.BindRootExit(rootExit, () => (rootExit.Result, false));
+            var drains = Task.WhenAll(output, error);
+            nativeCompletion = drains;
+            try
             {
-                // Blocking native termination remains with this owner, never the caller's cancellation path.
-                await Task.Run(() =>
+                await CommandOutputCapture.WaitForExitOrInterruptionAsync(rootExit, output, error, stop).ConfigureAwait(false);
+                if (rootExit.IsCompletedSuccessfully)
+                    await CommandOutputCapture.DrainAfterExitAsync(drains, stop).ConfigureAwait(false);
+            }
+            finally
+            {
+                // SDK WaitAsync includes descendant reaping/teardown and holds the control lock.
+                // Settle the non-finalizing observer before either Kill or WaitAsync takes that lock.
+                observationStop.Cancel();
+                try { await rootExit.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (observationStop.IsCancellationRequested) { }
+                finally
                 {
-                    try { process.Kill(); }
-                    finally
+                    capture.CaptureRootExit();
+                    capture.StandardOutput.Interrupt();
+                    capture.StandardError.Interrupt();
+                    // Close the SDK streams independently of a potentially blocked Kill. All workers stay
+                    // under this operation's admission slot and scratch lifetime until they really settle.
+                    var close = Task.Run(() =>
                     {
                         try { stdoutCloser?.Close(); }
                         finally { stderrCloser?.Close(); }
+                    });
+                    var kill = rootExit.IsCompletedSuccessfully
+                        ? Task.CompletedTask : Task.Run(() => process.Kill());
+                    try { await Task.WhenAll(close, kill).ConfigureAwait(false); }
+                    finally
+                    {
+                        // Finalization is mandatory even after root exit or a failed Kill. Its duration
+                        // cannot turn the cached root status into a caller timeout.
+                        var wait = process.WaitAsync(CancellationToken.None);
+                        nativeCompletion = Task.WhenAll(wait, drains);
+                        await nativeCompletion.ConfigureAwait(false);
+                        var result = await wait.ConfigureAwait(false);
+                        _logger.Info($"[mxc] operation=exit applied=unknown exit={result.ExitCode} timedOut={result.TimedOut}");
                     }
-                }).ConfigureAwait(false);
+                }
             }
-            await completion.ConfigureAwait(false);
-            var result = await wait.ConfigureAwait(false);
-            var captures = await Task.WhenAll(output, error).ConfigureAwait(false);
-            stop.ThrowIfCancellationRequested();
-            _logger.Info($"[mxc] operation=exit applied=unknown exit={result.ExitCode} timedOut={result.TimedOut}");
-            return new CommandResult
-            {
-                Stdout = captures[0], Stderr = captures[1], ExitCode = result.ExitCode,
-                TimedOut = result.TimedOut, ExecutionMode = NodeToolExecutionMode.Sandbox,
-                ErrorCategory = result.TimedOut ? NodeToolErrorCategory.Timeout :
-                    result.ExitCode == 0 ? NodeToolErrorCategory.None : NodeToolErrorCategory.CommandFailed,
-            };
+            return capture.Snapshot(NodeToolExecutionMode.Sandbox);
         }
         catch (OperationCanceledException) { throw; }
         catch (NotSupportedException ex)
@@ -228,6 +256,18 @@ public sealed class MxcCommandRunner : ICommandRunner
         }
     }
 
+    private static async Task<int> ObserveRootExitAsync(IMxcProcess process, CancellationToken stop)
+    {
+        var pollMs = 1;
+        while (true)
+        {
+            stop.ThrowIfCancellationRequested();
+            if (process.TryGetExitCode(out var exitCode)) return exitCode;
+            await Task.Delay(pollMs, stop).ConfigureAwait(false);
+            pollMs = Math.Min(pollMs * 2, 50);
+        }
+    }
+
     private async Task ObserveCleanupAsync(Task<CommandResult> owned)
     {
         try { await owned.ConfigureAwait(false); }
@@ -237,77 +277,9 @@ public sealed class MxcCommandRunner : ICommandRunner
 
     internal static async Task<string> CollectAsync(Stream? stream, long byteBudget)
     {
-        if (stream is null) return "";
-        var cap = (int)Math.Clamp(byteBudget, 0, int.MaxValue - 16);
-        var bytes = new byte[8192];
-        var prefixLength = 0;
-        while (prefixLength < 4)
-        {
-            var read = await stream.ReadAsync(bytes.AsMemory(prefixLength, 4 - prefixLength)).ConfigureAwait(false);
-            if (read == 0) break;
-            prefixLength += read;
-        }
-        // StreamReader can misidentify a BOM when a native pipe fragments it into single-byte reads.
-        Encoding encoding = new UTF8Encoding(false, false);
-        var bom = 0;
-        if (prefixLength >= 4 && bytes[0] == 0xff && bytes[1] == 0xfe && bytes[2] == 0 && bytes[3] == 0)
-        { encoding = new UTF32Encoding(false, false); bom = 4; }
-        else if (prefixLength >= 4 && bytes[0] == 0 && bytes[1] == 0 && bytes[2] == 0xfe && bytes[3] == 0xff)
-        { encoding = new UTF32Encoding(true, false); bom = 4; }
-        else if (prefixLength >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf) bom = 3;
-        else if (prefixLength >= 2 && bytes[0] == 0xff && bytes[1] == 0xfe)
-        { encoding = Encoding.Unicode; bom = 2; }
-        else if (prefixLength >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff)
-        { encoding = Encoding.BigEndianUnicode; bom = 2; }
-        var decoder = encoding.GetDecoder();
-        var chars = new char[8194];
-        var result = new StringBuilder(Math.Min(cap, 8192));
-        const string marker = "\n[truncated]";
-        var contentCap = Math.Max(0, cap - Encoding.UTF8.GetByteCount(marker));
-        var retained = 0;
-        var truncated = false;
-        char? pendingHigh = null;
-        Decode(prefixLength - bom, bom, eof: false);
-        while (true)
-        {
-            var read = await stream.ReadAsync(bytes).ConfigureAwait(false);
-            Decode(read, 0, eof: read == 0);
-            if (read == 0) break;
-        }
-        if (truncated && cap >= Encoding.UTF8.GetByteCount(marker)) result.Append(marker);
-        return result.ToString();
-
-        void Decode(int byteCount, int offset, bool eof)
-        {
-            var count = decoder.GetChars(bytes, offset, byteCount, chars, 0, flush: eof);
-            if (pendingHigh is { } high)
-            {
-                if (count > 0 && char.IsLowSurrogate(chars[0]))
-                {
-                    Append(new string([high, chars[0]]));
-                    Array.Copy(chars, 1, chars, 0, --count);
-                }
-                else Append("\uFFFD");
-                pendingHigh = null;
-            }
-            for (var i = 0; i < count;)
-            {
-                if (i == count - 1 && char.IsHighSurrogate(chars[i]))
-                { pendingHigh = chars[i]; break; }
-                var width = char.IsHighSurrogate(chars[i]) && i + 1 < count && char.IsLowSurrogate(chars[i + 1]) ? 2 : 1;
-                var chunk = chars.AsSpan(i, width);
-                i += width;
-                Append(chunk);
-            }
-        }
-
-        void Append(ReadOnlySpan<char> chunk)
-        {
-            var cost = Encoding.UTF8.GetByteCount(chunk);
-            if (!truncated && retained + cost <= contentCap)
-            { result.Append(chunk); retained += cost; }
-            else truncated = true;
-        }
+        var capture = new CommandOutputCapture.BoundedStream(byteBudget);
+        await capture.CollectAsync(stream).ConfigureAwait(false);
+        return capture.Snapshot();
     }
 
     private static int EffectiveTimeout(int request, int setting) =>

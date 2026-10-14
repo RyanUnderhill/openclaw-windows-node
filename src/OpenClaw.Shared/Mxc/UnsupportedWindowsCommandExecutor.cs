@@ -7,7 +7,7 @@ namespace OpenClaw.Shared.Mxc;
 internal static class UnsupportedWindowsCommandExecutor
 {
     internal static async Task<CommandResult> RunAsync(
-        CommandRequest command, string scratch, long outputBudget, CancellationToken stop)
+        CommandRequest command, string scratch, CommandOutputCapture capture, CancellationToken stop)
     {
         if (command.Env is { Count: > 0 })
             throw new NotSupportedException("Custom environment variables are not bound to command approval.");
@@ -40,51 +40,51 @@ internal static class UnsupportedWindowsCommandExecutor
         stop.ThrowIfCancellationRequested();
         using var process = Process.Start(info) ?? throw new IOException("The approved process could not be started.");
         Task? completion = null;
-        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var registration = stop.Register(() => cancelled.TrySetResult());
+        using var readers = CancellationTokenSource.CreateLinkedTokenSource(stop);
         try
         {
             process.StandardInput.Close();
-            var output = MxcCommandRunner.CollectAsync(process.StandardOutput.BaseStream, outputBudget);
-            var error = MxcCommandRunner.CollectAsync(process.StandardError.BaseStream, outputBudget);
+            var output = capture.StandardOutput.CollectAsync(process.StandardOutput.BaseStream, readers.Token);
+            var error = capture.StandardError.CollectAsync(process.StandardError.BaseStream, readers.Token);
+            var drains = Task.WhenAll(output, error);
             var wait = process.WaitForExitAsync(CancellationToken.None);
-            completion = Task.WhenAll((Task)wait, output, error);
-            var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            foreach (var task in new Task[] { wait, output, error })
-                _ = task.ContinueWith(_ => failed.TrySetResult(), CancellationToken.None,
-                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-                    TaskScheduler.Default);
-            if (await Task.WhenAny(completion, cancelled.Task, failed.Task).ConfigureAwait(false) != completion ||
-                stop.IsCancellationRequested)
+            capture.BindRootExit(wait, () => (process.ExitCode, false));
+            completion = Task.WhenAll(wait, drains);
+            await CommandOutputCapture.WaitForExitOrInterruptionAsync(wait, output, error, stop).ConfigureAwait(false);
+            if (wait.IsCompletedSuccessfully)
+                await CommandOutputCapture.DrainAfterExitAsync(drains, stop).ConfigureAwait(false);
+            else
                 await TerminateAsync().ConfigureAwait(false);
+            capture.StandardOutput.Interrupt();
+            capture.StandardError.Interrupt();
+            await readers.CancelAsync().ConfigureAwait(false);
             await completion.ConfigureAwait(false);
-            stop.ThrowIfCancellationRequested();
-            return new()
-            {
-                Stdout = await output.ConfigureAwait(false), Stderr = await error.ConfigureAwait(false),
-                ExitCode = process.ExitCode, ExecutionMode = NodeToolExecutionMode.Host,
-                ErrorCategory = process.ExitCode == 0 ? NodeToolErrorCategory.None : NodeToolErrorCategory.CommandFailed,
-            };
+            return capture.Snapshot(NodeToolExecutionMode.Host);
         }
         finally
         {
             // Retain the outer runner's ownership slot and scratch until host pipes and wait have completed.
-            if (!process.HasExited) await TerminateAsync().ConfigureAwait(false);
-            if (completion is not null)
+            try
             {
-                try { await completion.ConfigureAwait(false); }
+                if (!process.HasExited) await TerminateAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                capture.StandardOutput.Interrupt();
+                capture.StandardError.Interrupt();
+                await readers.CancelAsync().ConfigureAwait(false);
+                try
+                {
+                    if (completion is not null) await completion.ConfigureAwait(false);
+                }
                 catch (Exception) when (stop.IsCancellationRequested) { }
+                finally { capture.CaptureRootExit(); }
             }
         }
 
         Task TerminateAsync() => Task.Run(() =>
         {
-            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-            finally
-            {
-                try { process.StandardOutput.Dispose(); }
-                finally { process.StandardError.Dispose(); }
-            }
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
         });
     }
 }

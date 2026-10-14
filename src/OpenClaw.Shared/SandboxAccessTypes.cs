@@ -9,7 +9,7 @@ public enum SystemRunFilesystemScope
 
 public enum SystemRunAccessPreset { Strict, Balanced, Open }
 
-/// <summary>Preset-owned file and internet fields. Clipboard, UI, limits and approval policy stay independent.</summary>
+/// <summary>Preset-owned file and internet fields. Clipboard, limits and approval policy stay independent.</summary>
 public static class SystemRunPermissionPresets
 {
     public static SystemRunAccessPreset? Detect(SettingsData settings)
@@ -58,13 +58,15 @@ public enum SandboxClipboardMode
 }
 
 /// <summary>
-/// Whether a folder is exposed read-only or read-write to the sandbox.
+/// Explicit folder access, including a native deny distinct from legacy quarantine.
 /// </summary>
 public enum SandboxFolderAccess
 {
-    ReadOnly,
-    ReadWrite,
-    Blocked,
+    ReadOnly = 0,
+    ReadWrite = 1,
+    // Legacy quarantine, not a filesystem deny.
+    Blocked = 2,
+    NoAccess = 3,
 }
 
 /// <summary>
