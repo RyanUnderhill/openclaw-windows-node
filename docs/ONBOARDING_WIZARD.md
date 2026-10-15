@@ -1168,10 +1168,11 @@ use that same command, carrying its exact kind, identifier and model reference.
 The inline API form is already visible when there are
 no Gateway candidates or visible Local AI choice, without selecting its provider. Website links do not run
 installers. **Check again** repeats discovery explicitly; a failed scan is not
-an empty catalog. Optional native-conversation discovery is not offered during
-onboarding. When the Gateway requests a preference, an explicit provider action
-sends false; removing the checkbox never grants automatic permission. When the
-Gateway does not request a preference, the parameter remains absent.
+an empty catalog. Native-conversation discovery is a visible, default-off opt-in
+when the Gateway requests it. The current Boolean is sent only with an explicit
+provider action; unchecked means false, never automatic permission. When the
+Gateway does not request a preference, the parameter remains absent. Refreshing
+presentation retains the user's current checkbox value.
 
 #### One provider operation, one dialog
 
@@ -1528,7 +1529,7 @@ comparison without installation. Building fixtures alone is not rendered proof;
 high contrast and Windows text scaling need authorized visible validation.
 `OnboardingAiPageTests` mounts the production page with a scoped transport
 double and checks explicit selection, masked input, conversation-discovery
-disabled-by-default behavior, exact-model retry, uncertain replies, and cancellation before handoff.
+consent, exact-model retry, uncertain replies, and cancellation before handoff.
 `OnboardingArtworkRenderingTests` decodes the bundled SVGs through WinUI,
 checks library-qualified URIs, and renders all static mascot moods in light and
 dark themes. Set `OPENCLAW_UI_PROOF_DIR` to an isolated artifact directory to

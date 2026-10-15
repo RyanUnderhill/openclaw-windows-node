@@ -241,19 +241,19 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ProviderConversationDiscovery_IsNotOfferedAndDeclinesRequestedPreference(bool preferenceRequired)
+    public async Task ProviderConversationDiscovery_UsesVisibleDefaultOffOptIn(bool optIn)
     {
         await WithPageAsync(async (page, transport, completed) =>
         {
-            Assert.Null(page.FindName("CatalogPreference"));
+            var preference = Find<CheckBox>(page, "CatalogPreference");
+            Assert.Equal(Visibility.Visible, preference.Visibility);
+            Assert.False(preference.IsChecked);
             Assert.Single(transport.MethodCalls);
+            preference.IsChecked = optIn;
             await InvokeChoiceAsync(page);
             await WaitAsync(() => completed() == 1);
-            if (preferenceRequired)
-                Assert.False(transport.LastActivation.GetProperty("nativeSessionCatalogsEnabled").GetBoolean());
-            else
-                Assert.False(transport.LastActivation.TryGetProperty("nativeSessionCatalogsEnabled", out _));
-        }, configure: transport => transport.RequireCatalogConsent = preferenceRequired);
+            Assert.Equal(optIn, transport.LastActivation.GetProperty("nativeSessionCatalogsEnabled").GetBoolean());
+        }, configure: transport => transport.RequireCatalogConsent = true);
     }
 
     [Fact]

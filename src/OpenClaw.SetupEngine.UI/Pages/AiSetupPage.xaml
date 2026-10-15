@@ -112,6 +112,10 @@
                 </StackPanel>
                 <StackPanel x:Name="ChoicePanel" Spacing="12">
                     <InfoBar x:Name="UtilityNotice" IsOpen="True" IsClosable="False" Severity="Informational" Visibility="Collapsed" />
+                    <CheckBox x:Name="CatalogPreference" Visibility="Collapsed" IsChecked="False"
+                              HorizontalAlignment="Stretch" Checked="Preference_Changed" Unchecked="Preference_Changed">
+                        <TextBlock x:Name="CatalogPreferenceText" TextWrapping="Wrap" />
+                    </CheckBox>
                     <StackPanel x:Name="CandidatesSection" Spacing="8">
                         <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="8"
                                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">

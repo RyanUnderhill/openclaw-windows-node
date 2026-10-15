@@ -121,6 +121,8 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         NoChoicesText.Text = S("NoChoices");
         MoreExpander.Header = S("More.Header");
         ApiKeyInput.Header = S("ApiKey.Header");
+        CatalogPreferenceText.Text = S("CatalogOptIn");
+        AutomationProperties.SetName(CatalogPreference, S("CatalogOptIn"));
         RefreshButton.Content = S("Refresh.Content");
         ProviderCancelButton.Content = S("Cancel.Content");
         LegacyButton.Content = S("Legacy.Content");
@@ -535,6 +537,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             _deferredDetection = detection;
             return;
         }
+        var catalogConsent = CatalogPreference.IsChecked;
         var local = _localObservation?.Snapshot;
         _presentation = AiSetupPresentationModel.Create(detection,
             Enum.GetValues<GatewayAiSetupChoiceKind>().Where(Client!.SupportsChoice).ToHashSet(),
@@ -570,6 +573,8 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             MoreExpander.IsExpanded = false;
             NoChoicesText.Visibility = Visible(!_presentation.HasChoices);
             ApiKeyInput.Password = "";
+            CatalogPreference.Visibility = Visible(_presentation.NativeSessionCatalogPreferenceRequired);
+            CatalogPreference.IsChecked = catalogConsent;
             UtilityNotice.Visibility = Visible(_presentation.HasUtilityChoices);
         }
         finally { _rendering = false; }
@@ -645,7 +650,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         ApiKeyInput.Password = "";
         _operationTitle = row.Label;
         var catalogPreference = _presentation.NativeSessionCatalogPreferenceRequired
-            ? false : (bool?)null;
+            ? CatalogPreference.IsChecked == true : (bool?)null;
         return RunAsync(async ct =>
         {
             SelectChoice(row);
@@ -1159,7 +1164,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             var backgroundEnabled = !_busy && !_localActionBusy && !BackdropLocked && !ManagerRecoveryBlocked;
             CandidateChoices.IsEnabled = PrepareChoices.IsEnabled = FeaturedSignInChoices.IsEnabled =
                 MoreSignInChoices.IsEnabled = ApiProviderPicker.IsEnabled = ApiKeyInput.IsEnabled =
-                ApiKeysButton.IsEnabled = RecommendedInstalls.IsEnabled =
+                ApiKeysButton.IsEnabled = CatalogPreference.IsEnabled = RecommendedInstalls.IsEnabled =
                 MoreExpander.IsEnabled = RecommendedSection.IsEnabled = CheckAgainButton.IsEnabled =
                 RefreshButton.IsEnabled = LegacyButton.IsEnabled = backgroundEnabled;
             var step = Client?.Wizard?.Step;
@@ -1338,6 +1343,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         selected.Id == row.Id && !string.IsNullOrWhiteSpace(ApiKeyInput.Password);
 
     private void Input_Changed(object sender, RoutedEventArgs e) => Render();
+    private void Preference_Changed(object sender, RoutedEventArgs e) => Render();
     private static string S(string key) => SetupLocalization.GetString("Onboarding_AiSetup_" + key);
     private static Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
     private void ShowError(string key, string? detail = null)
