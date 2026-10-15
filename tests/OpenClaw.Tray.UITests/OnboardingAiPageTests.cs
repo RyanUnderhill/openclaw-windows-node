@@ -587,7 +587,7 @@ public sealed class OnboardingAiPageTests(UIThreadFixture ui, ITestOutputHelper 
             input.Password = "synthetic-key";
             await WaitAsync(() => connect.IsEnabled);
             Assert.True(connect.IsEnabled);
-            Assert.Null(page.FindName("CatalogPreference"));
+            Assert.False(Find<CheckBox>(page, "CatalogPreference").IsChecked);
             Assert.Single(transport.MethodCalls);
             Assert.Equal(0, completed());
             await InvokeChoiceAsync(page);
