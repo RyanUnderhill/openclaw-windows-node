@@ -210,8 +210,9 @@ public sealed class OnboardingPresentationContractTests
         Assert.DoesNotContain(document.Descendants(), element => element.Name.LocalName == "AdaptiveTrigger");
         Assert.Equal("ApiKeyFields_SizeChanged", (string?)Named("ApiKeyFields").Attribute("SizeChanged"));
         Assert.Contains("e.NewSize.Width >= 560", source);
-        Assert.DoesNotContain(document.Descendants(), element => (string?)element.Attribute(x + "Name") == "CatalogPreference");
-        Assert.Matches(@"_presentation\.NativeSessionCatalogPreferenceRequired\s+\?\s+false\s+:\s+\(bool\?\)null", source);
+        Assert.Equal("CheckBox", Named("CatalogPreference").Name.LocalName);
+        Assert.Equal("False", (string?)Named("CatalogPreference").Attribute("IsChecked"));
+        Assert.Contains("? CatalogPreference.IsChecked == true : (bool?)null", source);
         Assert.DoesNotContain(Named("ApiKeyFields").Descendants(),
             element => element.Attribute("Height") is not null || element.Attribute("FontSize") is not null);
     }
