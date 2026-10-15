@@ -278,6 +278,13 @@ public sealed class OnboardingSetupGalleryTests(UIThreadFixture ui, ITestOutputH
     }
 
     [Fact]
+    public void GallerySceneInventory_CoversEveryLocalAiState()
+    {
+        Assert.All(Enum.GetValues<LocalAiOnboardingState>(), state =>
+            Assert.Contains(RequiredScenes, scene => scene.Family == "ai" && scene.State == state.ToString()));
+    }
+
+    [Fact]
     [Trait("Category", "NativeOnboardingProof")]
     public async Task OwnedWindows_KeepProductDpiAcrossSharedCaptureAndAsyncGalleryCreation()
     {
