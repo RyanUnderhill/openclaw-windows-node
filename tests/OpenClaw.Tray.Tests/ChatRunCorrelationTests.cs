@@ -49,10 +49,34 @@ public sealed class ChatRunCorrelationTests
     {
         var state = new ChatLifecycleState();
         for (var i = 0; i <= 64; i++)
-            state.RetireCancelledRun($"run-{i}");
+            state.RetireResetRun($"run-{i}");
         Assert.False(state.IsCancelledRun("run-0"));
         Assert.True(state.IsCancelledRun("run-1"));
         Assert.True(state.IsCancelledRun("run-64"));
+    }
+
+    [Fact]
+    public void Lifecycle_FailedAbortAfterTerminalReleasesAbortRetirement()
+    {
+        var state = new ChatLifecycleState();
+        state.StartRun("main", "run");
+        state.BeginAbort("main", hadActiveTurn: true);
+        state.RemoveAbortedRun("run");
+        Assert.True(state.IsCancelledRun("run"));
+        state.RollbackAbort("main", "run");
+        Assert.False(state.IsCancelledRun("run"));
+    }
+
+    [Fact]
+    public void Lifecycle_FailedAbortDoesNotClearIndependentResetFence()
+    {
+        var state = new ChatLifecycleState();
+        state.StartRun("main", "run");
+        state.BeginAbort("main", hadActiveTurn: true);
+        state.RemoveAbortedRun("run");
+        state.RetireResetRun("run");
+        state.RollbackAbort("main", "run");
+        Assert.True(state.IsCancelledRun("run"));
     }
 
     [Theory]
@@ -63,7 +87,7 @@ public sealed class ChatRunCorrelationTests
     {
         var state = new ChatLifecycleState();
         state.StartRun("main", "current");
-        state.RetireCancelledRun("old");
+        state.RetireResetRun("old");
         Assert.False(state.IsCancelledRun(runId));
         Assert.False(state.ShouldSuppress("main", runId));
         state.BeginAbort("main", hadActiveTurn: true);
@@ -133,6 +157,52 @@ public sealed class ChatRunCorrelationTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public void Gate_FailedAbortRestoresTrailingFinalRegardlessOfTerminalOrder(bool terminalBeforeRollback)
+    {
+        var (state, context) = CreateState();
+        state.ProcessAgentEvent(Lifecycle("run", "start"), "main", context);
+        state.BeginAbort("main");
+        if (terminalBeforeRollback)
+            state.ProcessAgentEvent(Lifecycle("run", "end"), "main", context);
+        state.RollbackAbort("main", "run");
+        if (!terminalBeforeRollback)
+            state.ProcessAgentEvent(Lifecycle("run", "end"), "main", context);
+
+        var final = state.GateIncomingChatMessage(AssistantFinal("run", "Trailing final"), context);
+        Assert.False(final.Suppressed || final.Drop,
+            "A failed abort left the uncancelled run's trailing final fenced.");
+    }
+
+    [Theory]
+    [InlineData("resolved")]
+    [InlineData("expired")]
+    public void Gate_RetiredRunCanCloseOnlyItsPendingApproval(string terminalPhase)
+    {
+        var (state, context) = CreateState();
+        state.ProcessAgentEvent(Lifecycle("old", "start"), "main", context);
+        state.ProcessAgentEvent(Approval("old", "requested", "appr-old"), "main", context);
+        Assert.Equal("appr-old", state.Snapshot(context).Timelines["main"].PendingPermission?.RequestId);
+        state.BeginAbort("main");
+        state.CompleteAbort("main", "old");
+        state.ProcessAgentEvent(Lifecycle("old", "end"), "main", context);
+
+        Assert.False(state.ProcessAgentEvent(Approval("old", terminalPhase, "appr-other"), "main", context).Process);
+        Assert.False(state.ProcessAgentEvent(Approval("old", "requested", "appr-new"), "main", context).Process);
+        Assert.Equal("appr-old", state.Snapshot(context).Timelines["main"].PendingPermission?.RequestId);
+
+        Assert.True(state.ProcessAgentEvent(Approval("old", terminalPhase, "appr-old"), "main", context).Process);
+        Assert.Null(state.Snapshot(context).Timelines["main"].PendingPermission);
+        var lateOutput = new AgentEventInfo
+        {
+            SessionKey = "main", RunId = "old", Stream = "assistant",
+            Data = JsonSerializer.SerializeToElement(new { delta = "late" }),
+        };
+        Assert.False(state.ProcessAgentEvent(lateOutput, "main", context).Process);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public void Reset_TerminalDoesNotForgetSuppressionBeforeLateFinal(bool terminalAfterNewRun)
     {
         var (state, context) = CreateState();
@@ -196,6 +266,23 @@ public sealed class ChatRunCorrelationTests
     private static ChatMessageInfo AssistantFinal(string runId, string text) => new()
     {
         SessionKey = "main", RunId = runId, Role = "assistant", Text = text, State = "final",
+    };
+
+    private static AgentEventInfo Approval(string runId, string phase, string approvalId) => new()
+    {
+        SessionKey = "main",
+        RunId = runId,
+        Stream = "approval",
+        Data = JsonSerializer.SerializeToElement(new
+        {
+            phase,
+            approvalId,
+            approvalSlug = approvalId,
+            host = "gateway",
+            command = "openclaw nodes invoke --node \"Windows Node\" --command system.run",
+            title = "Exec approval",
+            message = "Approve this exec?",
+        }),
     };
 
     private static AgentEventInfo Lifecycle(string runId, string phase, long timestamp = 0) => new()

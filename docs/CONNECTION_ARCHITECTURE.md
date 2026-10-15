@@ -510,7 +510,11 @@ or end a newer turn. A cancelled run stays fenced after its terminal arrives:
 `ChatLifecycleState` retires it into a bounded set (64 run IDs, evicted by
 arrival order) so late chat finals and agent output still cannot reach the
 timeline, and a replayed lifecycle start for an aborted run cannot replace the
-current run. A rolled-back abort is not retired. Reset admission also checks
+current run. A rolled-back (failed) abort is not retired, and if the run's
+terminal arrived before the abort failed, the rollback releases that abort
+retirement without clearing an independent reset fence. A retired run may
+still close the permission request it left pending (matched by approval ID);
+it cannot add new requests or output. Reset admission also checks
 the supplied run against ignored reset runs before using timestamp admission.
 Runs that completed normally are not fenced. Frames without a run ID retain
 legacy thread-level handling; they cannot be reliably correlated to an older

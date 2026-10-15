@@ -1941,7 +1941,7 @@ internal sealed class ChatConversationState
             // Reset consumes the ignored run's terminal to reload history. Keep
             // fencing that run's chat frames, which can arrive after the terminal.
             if (resetGate.ReloadHistory && !string.IsNullOrWhiteSpace(evt.RunId))
-                _lifecycle.RetireCancelledRun(evt.RunId);
+                _lifecycle.RetireResetRun(evt.RunId);
             return new(
                 false,
                 resetGate.ReloadHistory,
@@ -1949,8 +1949,10 @@ internal sealed class ChatConversationState
                 openedLifecycle);
         }
         // A retired run's terminal was already handled, and a replayed start for
-        // an aborted run must not replace the current run.
-        if (_lifecycle.IsRetiredCancelledRun(evt.RunId) ||
+        // an aborted run must not replace the current run. A retired run may only
+        // close the permission it left pending; it cannot add requests or output.
+        if (_lifecycle.IsRetiredCancelledRun(evt.RunId) &&
+            !IsPendingTerminalApprovalLocked(evt, threadId, out _) ||
             ChatEventMapper.IsLifecycleStart(evt) && _lifecycle.IsRunAborted(evt.RunId))
         {
             Logger.Debug($"[ChatProvider] Dropping cancelled-run agent event for threadId='{threadId}' stream='{evt.Stream}'");
@@ -2078,26 +2080,32 @@ internal sealed class ChatConversationState
         AgentEventInfo evt,
         string threadId)
     {
-        var terminal = ChatEventMapper.MapTerminalApproval(evt);
-        if (terminal is null)
+        if (!IsPendingTerminalApprovalLocked(evt, threadId, out var terminal))
             return false;
         var timeline = GetOrCreateTimelineLocked(threadId);
-        var pendingId = timeline.PendingPermission?.RequestId;
-        if (pendingId is null ||
-            !_approval.Matches(
-                pendingId,
-                terminal.ApprovalSlug,
-                terminal.ApprovalId))
-        {
-            return false;
-        }
+        var pendingId = timeline.PendingPermission!.RequestId;
         _timelines[threadId] = ChatTimelineReducer.ResolvePermission(
             timeline,
             pendingId,
             ChatEventMapper.MapTerminalApprovalDecision(
-                terminal.Phase,
+                terminal!.Phase,
                 terminal.Decision));
         return true;
+    }
+
+    private bool IsPendingTerminalApprovalLocked(
+        AgentEventInfo evt,
+        string threadId,
+        out ChatTerminalApprovalMapping? terminal)
+    {
+        terminal = ChatEventMapper.MapTerminalApproval(evt);
+        return terminal is not null &&
+               _timelines.TryGetValue(threadId, out var timeline) &&
+               timeline.PendingPermission?.RequestId is { } pendingId &&
+               _approval.Matches(
+                   pendingId,
+                   terminal.ApprovalSlug,
+                   terminal.ApprovalId);
     }
 
     internal void CompleteRemoteBackfill(string threadId)

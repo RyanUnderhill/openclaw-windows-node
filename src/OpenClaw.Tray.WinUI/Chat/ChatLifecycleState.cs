@@ -21,8 +21,19 @@ internal sealed class ChatLifecycleState
         new();
     // Aborted or reset-ignored runs whose terminal already arrived. Their late
     // output must stay suppressed after the live abort/reset state is cleared.
-    private readonly HashSet<string> _retiredCancelledRunIds = new(StringComparer.Ordinal);
-    private readonly Queue<string> _retiredCancelledRunOrder = new();
+    // Reasons are tracked separately so a failed abort cannot clear a reset fence.
+    private readonly Dictionary<string, RetiredRun> _retiredCancelledRuns = new(StringComparer.Ordinal);
+    private long _retiredCancelledRunOrder;
+
+    [Flags]
+    private enum RetireReason
+    {
+        None = 0,
+        Abort = 1,
+        Reset = 2,
+    }
+
+    private readonly record struct RetiredRun(RetireReason Reasons, long Order);
 
     private long _lifecycleStartSequence;
 
@@ -70,6 +81,9 @@ internal sealed class ChatLifecycleState
     {
         _abortedThreads.Remove(threadId);
         _abortedRunIds.Remove(runId);
+        // The terminal may have retired the run before the abort RPC failed.
+        // The run was not cancelled, so its trailing output is admissible again.
+        ReleaseRetirement(runId, RetireReason.Abort);
         RemoveActiveRun(threadId);
     }
 
@@ -91,7 +105,7 @@ internal sealed class ChatLifecycleState
         !string.IsNullOrWhiteSpace(runId) && _abortedRunIds.Contains(runId);
 
     internal bool IsRetiredCancelledRun(string? runId) =>
-        !string.IsNullOrWhiteSpace(runId) && _retiredCancelledRunIds.Contains(runId);
+        !string.IsNullOrWhiteSpace(runId) && _retiredCancelledRuns.ContainsKey(runId);
 
     /// <summary>
     /// True when a frame carries the run ID of a cancelled run, before or after
@@ -100,13 +114,39 @@ internal sealed class ChatLifecycleState
     internal bool IsCancelledRun(string? runId) =>
         IsRunAborted(runId) || IsRetiredCancelledRun(runId);
 
-    internal void RetireCancelledRun(string runId)
+    /// <summary>Fences a run whose terminal a session reset consumed.</summary>
+    internal void RetireResetRun(string runId) =>
+        Retire(runId, RetireReason.Reset);
+
+    private void Retire(string runId, RetireReason reason)
     {
-        if (string.IsNullOrWhiteSpace(runId) || !_retiredCancelledRunIds.Add(runId))
+        if (string.IsNullOrWhiteSpace(runId))
             return;
-        _retiredCancelledRunOrder.Enqueue(runId);
-        if (_retiredCancelledRunOrder.Count > RetiredCancelledRunCapacity)
-            _retiredCancelledRunIds.Remove(_retiredCancelledRunOrder.Dequeue());
+        if (_retiredCancelledRuns.TryGetValue(runId, out var existing))
+        {
+            _retiredCancelledRuns[runId] = existing with { Reasons = existing.Reasons | reason };
+            return;
+        }
+        _retiredCancelledRuns[runId] = new(reason, ++_retiredCancelledRunOrder);
+        if (_retiredCancelledRuns.Count > RetiredCancelledRunCapacity)
+        {
+            var oldest = _retiredCancelledRuns.MinBy(pair => pair.Value.Order).Key;
+            _retiredCancelledRuns.Remove(oldest);
+        }
+    }
+
+    private void ReleaseRetirement(string runId, RetireReason reason)
+    {
+        if (string.IsNullOrWhiteSpace(runId) ||
+            !_retiredCancelledRuns.TryGetValue(runId, out var existing))
+        {
+            return;
+        }
+        var remaining = existing.Reasons & ~reason;
+        if (remaining == RetireReason.None)
+            _retiredCancelledRuns.Remove(runId);
+        else
+            _retiredCancelledRuns[runId] = existing with { Reasons = remaining };
     }
 
     internal bool HasPendingAbort(string threadId) =>
@@ -136,7 +176,7 @@ internal sealed class ChatLifecycleState
     internal void RemoveAbortedRun(string? runId)
     {
         if (!string.IsNullOrEmpty(runId) && _abortedRunIds.Remove(runId))
-            RetireCancelledRun(runId);
+            Retire(runId, RetireReason.Abort);
     }
 
     internal void ClearThreadSuppression(string threadId) =>
