@@ -39,7 +39,10 @@ public static class ChatNavigationReadiness
             if ((long)timeout.TotalMilliseconds == 0)
                 deadline.Cancel();
 
-            return await tcs.Task.ConfigureAwait(true);
+            var ready = await tcs.Task.ConfigureAwait(true);
+            if (!ready)
+                cancellationToken.ThrowIfCancellationRequested();
+            return ready;
         }
         finally
         {

@@ -364,7 +364,10 @@ and is independently testable.
 `ChatNavigationReadiness` settles operator readiness, its real deadline, and
 caller cancellation through one atomic completion source. A connected event
 that completes first cannot become a timeout just because notification or UI
-resumption is delayed. Downstream continuations remain asynchronous because
+resumption is delayed, and retains precedence over later cancellation. A timeout
+result rechecks caller cancellation when its continuation resumes, so canceled
+navigation propagates cancellation instead of consuming a stale timeout.
+Downstream continuations remain asynchronous because
 connection state events may be emitted while the manager holds its transition
 semaphore. The ready/null fast path and post-subscription snapshot check retain
 their existing precedence; every pending wait disposes its deadline and both

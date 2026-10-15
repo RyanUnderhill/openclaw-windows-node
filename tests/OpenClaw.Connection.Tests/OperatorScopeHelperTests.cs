@@ -1,5 +1,6 @@
 using OpenClaw.Connection;
 using OpenClaw.Shared;
+using System.Collections.Concurrent;
 using System.Reflection;
 using Xunit;
 
@@ -144,6 +145,60 @@ public class ChatNavigationReadinessTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
+    public async Task WaitForOperatorHandshakeAsync_CancellationAfterQueuedCompletion_PreservesOutcomePrecedence(
+        bool connectedBeforeCancellation)
+    {
+        var mgr = new StubConnectionManager(RoleConnectionState.Connecting);
+        using var cts = new CancellationTokenSource();
+        var context = new QueuedSynchronizationContext();
+        var previousContext = SynchronizationContext.Current;
+        Task<bool> waitTask;
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            waitTask = ChatNavigationReadiness.WaitForOperatorHandshakeAsync(
+                mgr,
+                connectedBeforeCancellation ? Timeout.InfiniteTimeSpan : TimeSpan.FromSeconds(1),
+                cts.Token);
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+
+        try
+        {
+            if (connectedBeforeCancellation)
+                mgr.SimulateConnected();
+
+            await context.Posted.WaitAsync(HangGuard);
+            Assert.False(waitTask.IsCompleted);
+            Assert.Equal(1, mgr.SubscriberCount);
+            cts.Cancel();
+            context.Drain();
+
+            if (connectedBeforeCancellation)
+            {
+                Assert.True(await waitTask.WaitAsync(HangGuard));
+            }
+            else
+            {
+                var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                    () => waitTask.WaitAsync(HangGuard));
+                Assert.Equal(cts.Token, error.CancellationToken);
+            }
+            Assert.Equal(0, mgr.SubscriberCount);
+        }
+        finally
+        {
+            cts.Cancel();
+            context.Drain();
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
     public async Task WaitForOperatorHandshakeAsync_PreservesReadyFirstPrecedence(bool nullManager)
     {
         var mgr = nullManager ? null : new StubConnectionManager(RoleConnectionState.Connected);
@@ -254,6 +309,26 @@ public class ChatNavigationReadinessTests
     }
 
     // ─── Stub ───
+
+    private sealed class QueuedSynchronizationContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _callbacks = new();
+        private readonly TaskCompletionSource _posted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Posted => _posted.Task;
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            _callbacks.Enqueue((callback, state));
+            _posted.TrySetResult();
+        }
+
+        public void Drain()
+        {
+            while (_callbacks.TryDequeue(out var callback))
+                callback.Callback(callback.State);
+        }
+    }
 
     private sealed class StubConnectionManager : IGatewayConnectionManager
     {
