@@ -22,6 +22,7 @@ internal static class OnboardingNativeProof
 {
     private static readonly Lazy<SourceIdentity> Source = new(ReadSourceIdentity);
     private static readonly string RunId = Guid.NewGuid().ToString("N");
+    internal static readonly TimeSpan OcrPassTimeout = TimeSpan.FromSeconds(30);
     private static readonly ConditionalWeakTable<Microsoft.UI.Xaml.Controls.Frame, NavigationCaptureState> NavigationStates = new();
     private static readonly List<string> DpiContextTrace = [];
 
@@ -719,8 +720,7 @@ internal static class OnboardingNativeProof
         var decoder = await BitmapDecoder.CreateAsync(stream);
         static string Normalize(string text) => string.Concat(text.Where(char.IsLetterOrDigit)).ToLowerInvariant();
         using var originalBitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore);
-        using var originalTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        var original = await engine.RecognizeAsync(originalBitmap).AsTask(originalTimeout.Token);
+        var original = await RunOcrPassAsync(ct => engine.RecognizeAsync(originalBitmap).AsTask(ct));
         if (labels.All(label => Normalize(original.Text).Contains(Normalize(label), StringComparison.Ordinal)))
             return new(original.Text, original.Text, 1, decoder.PixelWidth, decoder.PixelHeight,
                 decoder.PixelWidth, decoder.PixelHeight, []);
@@ -737,8 +737,7 @@ internal static class OnboardingNativeProof
         };
         using var bitmap = await decoder.GetSoftwareBitmapAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore,
             transform, ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-        var result = await engine.RecognizeAsync(bitmap).AsTask(timeout.Token);
+        var result = await RunOcrPassAsync(ct => engine.RecognizeAsync(bitmap).AsTask(ct));
         var missing = labels.Where(label => !Normalize(result.Text).Contains(Normalize(label), StringComparison.Ordinal)).ToArray();
         File.WriteAllText(Path.ChangeExtension(path, ".ocr.json"), JsonSerializer.Serialize(new
         {
@@ -753,6 +752,17 @@ internal static class OnboardingNativeProof
             Assert.Contains(label, new[] { "Connect your AI", "Local AI on this PC" });
         return new(original.Text, result.Text, factor, decoder.PixelWidth, decoder.PixelHeight,
             transform.ScaledWidth, transform.ScaledHeight, missing);
+    }
+
+    internal static async Task<T> RunOcrPassAsync<T>(
+        Func<CancellationToken, Task<T>> recognize, TimeProvider? timeProvider = null)
+    {
+        using var timeout = new CancellationTokenSource(OcrPassTimeout, timeProvider ?? TimeProvider.System);
+        try { return await recognize(timeout.Token); }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException("Native-window proof OCR exceeded its 30-second pass deadline.");
+        }
     }
 
     private static SourceIdentity ReadSourceIdentity()
