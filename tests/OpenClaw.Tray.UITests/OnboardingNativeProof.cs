@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -236,8 +237,27 @@ internal static class OnboardingNativeProof
         var handle = Handle(window);
         AssertOwned(handle);
         window.Activate();
-        SetForegroundWindow(handle);
-        Assert.Equal(handle, GetForegroundWindow());
+        for (var attempt = 0; attempt < 20; attempt++)
+        {
+            BringWindowToTop(handle);
+            SetForegroundWindow(handle);
+            if (GetForegroundWindow() == handle)
+                return;
+            Thread.Sleep(50);
+        }
+        var actual = GetForegroundWindow();
+        Assert.Fail($"Could not foreground the owned proof window. Expected {DescribeWindow(handle)}; actual {DescribeWindow(actual)}.");
+    }
+
+    private static string DescribeWindow(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return "HWND=0";
+        _ = GetWindowThreadProcessId(handle, out var processId);
+        var className = new StringBuilder(256);
+        var title = new StringBuilder(256);
+        _ = GetClassName(handle, className, className.Capacity);
+        _ = GetWindowText(handle, title, title.Capacity);
+        return $"HWND=0x{handle.ToInt64():X}, PID={processId}, class='{className}', title='{title}'";
     }
 
     internal static async Task AwaitManualForegroundAdmissionAsync(Window window, ITestOutputHelper output)
@@ -935,6 +955,11 @@ internal static class OnboardingNativeProof
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr window);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool BringWindowToTop(IntPtr window);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(
+        IntPtr window, StringBuilder className, int maxCount);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(
+        IntPtr window, StringBuilder title, int maxCount);
     [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(NativePoint point);
     [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr window, uint flags);
     [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
