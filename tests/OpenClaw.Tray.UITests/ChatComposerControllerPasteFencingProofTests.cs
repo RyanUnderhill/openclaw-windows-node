@@ -61,7 +61,7 @@ public sealed class ChatComposerControllerPasteFencingProofTests
         var dispatcher = new WinUIDispatcher(ui.Dispatcher);
         var temp = new TempDirectory();
         var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
         var provider = new NoopChatDataProvider();
         var hostActions = new ChatComposerHostActions(null, null, null, null, null);
         var session = factory.Create(provider, hostActions, initialSpeakerMuted: false);

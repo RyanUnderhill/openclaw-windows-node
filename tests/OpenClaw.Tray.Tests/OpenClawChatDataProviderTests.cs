@@ -813,7 +813,7 @@ public class OpenClawChatDataProviderTests
             var dispatcher = new Presentation.RecordingUiDispatcher();
             using var temp = new OpenClaw.TestSupport.TempDirectory();
             using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-            using var composer = new ChatComposerFactory(dispatcher, store).Create(
+            using var composer = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore()).Create(
                 provider, new ChatComposerHostActions(null, null, null, null, null), initialSpeakerMuted: false);
             composer.ApplyInputs(new ChatComposerInputs(
                 "connected", true, snapshots[^1].Threads.Single(thread => thread.Id == "main"),

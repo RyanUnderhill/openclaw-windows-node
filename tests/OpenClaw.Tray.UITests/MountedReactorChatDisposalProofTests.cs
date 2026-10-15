@@ -66,7 +66,7 @@ public sealed class MountedReactorChatDisposalProofTests
             var dispatcher = new WinUIDispatcher(_ui.Dispatcher);
             using var temp = new TempDirectory();
             using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-            var factory = new ChatComposerFactory(dispatcher, store);
+            var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
             var provider = new NoopChatDataProvider();
             var hostActions = new ChatComposerHostActions(null, null, null, null, null);
             var session = factory.Create(provider, hostActions, initialSpeakerMuted: false);
@@ -117,7 +117,7 @@ public sealed class MountedReactorChatDisposalProofTests
             string? selectedSession = null;
             using var session = ReactorChatHostExtensions.CreateComposerSession(
                 new Border(),
-                new ChatComposerFactory(dispatcher, store),
+                new ChatComposerFactory(dispatcher, store, new SandboxStatusStore()),
                 new NoopChatDataProvider(),
                 onVoiceRequest: null,
                 onAttachClick: null,
@@ -151,10 +151,10 @@ public sealed class MountedReactorChatDisposalProofTests
         {
             var dispatcher = new WinUIDispatcher(_ui.Dispatcher);
             using var temp = new TempDirectory();
-            var settings = new SettingsManager(temp.Path) { SystemRunSandboxEnabled = true };
+            var settings = new SettingsManager(temp.Path) { NodeSystemRunEnabled = true };
             using var store = new SettingsStore(settings, dispatcher);
             var provider = new NoopChatDataProvider();
-            using var session = new ChatComposerFactory(dispatcher, store).Create(
+            using var session = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore()).Create(
                 provider, new ChatComposerHostActions(null, null, null, null, null), false);
             var existingContent = new TextBlock { Text = "Keep existing content" };
             var target = new Border { Child = existingContent };
@@ -171,7 +171,7 @@ public sealed class MountedReactorChatDisposalProofTests
                 Assert.True(session.Controller.IsDisposed);
                 Assert.Same(existingContent, target.Child);
                 var revision = session.ViewModel.RenderRevision;
-                settings.SystemRunSandboxEnabled = false;
+                settings.NodeSystemRunEnabled = false;
                 settings.Save();
                 Assert.Equal(revision, session.ViewModel.RenderRevision);
             }
@@ -195,7 +195,7 @@ public sealed class MountedReactorChatDisposalProofTests
             var dispatcher = new WinUIDispatcher(_ui.Dispatcher);
             using var temp = new TempDirectory();
             using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-            var session = new ChatComposerFactory(dispatcher, store).Create(
+            var session = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore()).Create(
                 new NoopChatDataProvider(),
                 new(null, null, (ct, _) => { captureToken = ct; return capture.Task; }, null, null), false);
             var reactor = new ReactorHostControl();

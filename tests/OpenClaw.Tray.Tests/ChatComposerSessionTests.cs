@@ -41,7 +41,7 @@ public sealed class ChatComposerSessionTests
         var dispatcher = new RecordingUiDispatcher();
         using var temp = new TempDirectory();
         using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
         var provider = new FakeChatDataProviderForComposerTests();
         var hostActions = new ChatComposerHostActions(null, null, null, null, null);
         var session = factory.Create(provider, hostActions, initialSpeakerMuted: false);
@@ -58,7 +58,7 @@ public sealed class ChatComposerSessionTests
         var dispatcher = new RecordingUiDispatcher();
         using var temp = new TempDirectory();
         using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
         var provider = new FakeChatDataProviderForComposerTests();
         var hostActions = new ChatComposerHostActions(null, null, null, null, null);
 
@@ -77,7 +77,7 @@ public sealed class ChatComposerSessionTests
         var dispatcher = new RecordingUiDispatcher();
         using var temp = new TempDirectory();
         using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
         var provider = new FakeChatDataProviderForComposerTests();
         var hostActions = new ChatComposerHostActions(null, () => { }, null, null, null);
 
@@ -93,7 +93,7 @@ public sealed class ChatComposerSessionTests
         var dispatcher = new RecordingUiDispatcher();
         using var temp = new TempDirectory();
         using var store = new SettingsStore(new SettingsManager(temp.Path), dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var factory = new ChatComposerFactory(dispatcher, store, new SandboxStatusStore());
         var session = factory.Create(
             new FakeChatDataProviderForComposerTests(),
             new ChatComposerHostActions(null, null, null, null, null),
@@ -117,33 +117,36 @@ public sealed class ChatComposerSessionTests
     {
         using var temp = new TempDirectory();
         var dispatcher = new RecordingUiDispatcher();
-        var settings = new SettingsManager(temp.Path) { SystemRunSandboxEnabled = true };
+        var settings = new SettingsManager(temp.Path) { NodeSystemRunEnabled = true };
         using var store = new SettingsStore(settings, dispatcher);
-        var factory = new ChatComposerFactory(dispatcher, store);
+        var status = new SandboxStatusStore();
+        status.Publish(new(true, false, true, [], isolationTier: "base-container", supportsProtectedPathDenies: true));
+        var factory = new ChatComposerFactory(dispatcher, store, status);
         var actions = new ChatComposerHostActions(null, null, null, null, null);
         using var first = factory.Create(new FakeChatDataProviderForComposerTests(), actions, false);
         using var second = factory.Create(new FakeChatDataProviderForComposerTests(), actions, false);
-        Assert.True(first.ViewModel.SandboxEnabled);
-        Assert.True(second.ViewModel.SandboxEnabled);
+        Assert.Equal(SandboxStatus.Available, first.ViewModel.SandboxStatus);
+        Assert.Equal(SandboxStatus.Available, second.ViewModel.SandboxStatus);
         first.ViewModel.SetDraft("Keep this draft");
         var attachment = new ChatAttachment { FileName = "keep.txt" };
         first.ViewModel.AddAttachments([attachment]);
 
-        settings.SystemRunSandboxEnabled = false;
+        settings.NodeSystemRunEnabled = false;
         settings.Save();
 
-        Assert.False(first.ViewModel.SandboxEnabled);
-        Assert.False(second.ViewModel.SandboxEnabled);
+        Assert.Equal(SandboxStatus.Disabled, first.ViewModel.SandboxStatus);
+        Assert.Equal(SandboxStatus.Disabled, second.ViewModel.SandboxStatus);
         Assert.Equal("Keep this draft", first.ViewModel.Draft);
         Assert.Same(attachment, Assert.Single(first.ViewModel.PendingAttachments));
 
         first.Dispose();
         var disposedRevision = first.ViewModel.RenderRevision;
-        settings.SystemRunSandboxEnabled = true;
+        settings.NodeSystemRunEnabled = true;
         settings.Save();
+        status.Publish(new(false, false, true, [], isWindowsUnsupported: true));
 
         Assert.Equal(disposedRevision, first.ViewModel.RenderRevision);
-        Assert.False(first.ViewModel.SandboxEnabled);
-        Assert.True(second.ViewModel.SandboxEnabled);
+        Assert.Equal(SandboxStatus.Disabled, first.ViewModel.SandboxStatus);
+        Assert.Equal(SandboxStatus.Compatibility, second.ViewModel.SandboxStatus);
     }
 }

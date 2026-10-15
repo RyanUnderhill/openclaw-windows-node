@@ -24,17 +24,18 @@ public sealed class ChatComposerViewModelTests
     public void SandboxSettings_IgnoreOlderSnapshotsAndUnrelatedChanges()
     {
         using var vm = new ChatComposerViewModel(new RecordingUiDispatcher(), false);
-        var snapshot = new SettingsSnapshot { Version = 2, SystemRunSandboxEnabled = true };
+        var snapshot = new SettingsSnapshot { Version = 2, NodeSystemRunEnabled = true };
         vm.ApplySandboxSettings(snapshot);
+        vm.ApplySandboxStatus(new(1, SandboxStatus.Available));
         var revision = vm.RenderRevision;
 
         vm.ApplySandboxSettings(new SettingsSnapshot { Version = 1 });
         vm.ApplySandboxSettings(snapshot with { Version = 3, AutoStart = true });
 
-        Assert.True(vm.SandboxEnabled);
+        Assert.Equal(SandboxStatus.Available, vm.SandboxStatus);
         Assert.Equal(revision, vm.RenderRevision);
-        vm.ApplySandboxSettings(snapshot with { Version = 4, SystemRunSandboxEnabled = false });
-        Assert.False(vm.SandboxEnabled);
+        vm.ApplySandboxSettings(snapshot with { Version = 4, NodeSystemRunEnabled = false });
+        Assert.Equal(SandboxStatus.Disabled, vm.SandboxStatus);
         Assert.Equal(revision + 1, vm.RenderRevision);
     }
 
@@ -47,12 +48,26 @@ public sealed class ChatComposerViewModelTests
             RunEnqueuedImmediately = false,
         };
         using var vm = new ChatComposerViewModel(dispatcher, false);
-        vm.ApplySandboxSettings(new SettingsSnapshot { Version = 1, SystemRunSandboxEnabled = true });
+        vm.ApplySandboxStatus(new(1, SandboxStatus.Available));
         vm.Dispose();
         dispatcher.FlushPending();
 
-        Assert.False(vm.SandboxEnabled);
+        Assert.Equal(SandboxStatus.Checking, vm.SandboxStatus);
         Assert.Equal(0, vm.RenderRevision);
+    }
+
+    [Fact]
+    public void SandboxStatus_RejectsStaleResultsAndPreservesSystemToolsGate()
+    {
+        using var vm = new ChatComposerViewModel(new RecordingUiDispatcher(), false);
+        vm.ApplySandboxStatus(new(3, SandboxStatus.Unavailable));
+        vm.ApplySandboxStatus(new(2, SandboxStatus.Available));
+        Assert.Equal(SandboxStatus.Unavailable, vm.SandboxStatus);
+        vm.ApplySandboxSettings(new() { Version = 1, NodeSystemRunEnabled = false });
+        vm.ApplySandboxStatus(new(4, SandboxStatus.Compatibility));
+        Assert.Equal(SandboxStatus.Disabled, vm.SandboxStatus);
+        vm.ApplySandboxSettings(new() { Version = 2, NodeSystemRunEnabled = true });
+        Assert.Equal(SandboxStatus.Compatibility, vm.SandboxStatus);
     }
 
     private static ChatThread MakeThread(string id = "session-1", string? model = null, string? thinking = null) =>

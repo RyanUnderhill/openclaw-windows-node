@@ -1,36 +1,38 @@
 # Concept: Node Sandbox
 
-The local preference for containing Windows node `system.run` commands.
-It does not describe Gateway tools or prove that a particular command was contained.
+The Windows node's observed SDK sandbox availability, with a shortcut to its
+permissions. It does not describe Gateway tools or certify an individual command.
 
 ## Composer presentation
 
 - Icon: `FluentIconCatalog.Sandbox`, a Shield (U+EA18). It shares the protection
   metaphor with Permissions.
-- On: `ChatSandboxOnBrush`, fixed blue (`#005FB8` in Light, `#60CDFF` in Dark),
+- Available: `ChatSandboxOnBrush`, fixed blue (`#005FB8` in Light, `#60CDFF` in Dark),
   independent of the user's Windows accent color.
-- Off: gray secondary text brush (`ChatSecondaryTextBrush`).
+- Other states: gray secondary text brush (`ChatSecondaryTextBrush`).
 - High contrast: system theme colors take precedence.
-- Accessible names: `Node Sandbox setting: On` and
-  `Node Sandbox setting: Off`.
+- Accessible name: localized `Node Sandbox` plus the current state.
 - Placement: right-hand action group, immediately before the microphone.
-- Flyout heading: `Node Sandbox`, with a compact `On` or `Off` state.
+- Flyout heading: `Node Sandbox`, with `Available`, `Compatibility`, `Unavailable`,
+  `Checking`, or `Tools off`.
 - Action: `Sandbox settings`, a full-width native subtle button with a chevron.
 - Localized titles follow the existing Sandbox page terminology; the action
   follows that locale's Settings navigation label rather than an English exemption.
 
-The icon opens a native flyout, not a toggle. Its accessible name identifies the
-saved setting. The 280-pixel flyout uses a padded header, one short caption,
-and a separated settings action. On says "Commands on this Windows node run in a
-sandbox." Off says "Commands on this Windows node run without a sandbox."
-The enabled runtime always blocks if containment is unavailable; it never
-retries on the host or silently clears the enabled preference. Opening the flyout
-does not probe availability, save settings, or change execution policy.
+The icon opens a native flyout, not a toggle. The 280-pixel flyout uses a padded
+header, one short caption, and a separated settings action. Available means the
+last SDK check supports containment, not that a particular command succeeded.
+Compatibility explicitly warns that positively unsupported Windows runs approved
+commands without containment. Unavailable means an uncertain or failed probe, not
+permission to downgrade. The system-tools kill switch takes precedence.
+Opening the flyout does not probe, save settings, or change execution policy.
 
 ## Owners
 
-`ISettingsStore` supplies persisted snapshots. `ChatComposerSession` owns the
-subscription; `ChatComposerViewModel` projects the sandbox preference.
+`SandboxStatusStore` publishes results from the existing app and Sandbox page
+probes; it performs no IO or authorization. `ISettingsStore` supplies the
+system-tools setting. `ChatComposerSession` owns both subscriptions;
+`ChatComposerViewModel` projects version-fenced status snapshots.
 `ReactorChatComposer` renders both Workspace and compact native chat.
 Each host supplies the existing `sandbox` Companion Settings route.
 

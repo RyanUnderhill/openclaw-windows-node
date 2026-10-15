@@ -137,6 +137,8 @@ internal sealed class SettingsStore : ISettingsStore
     private SettingsSnapshot CreateSnapshot(long version) => new()
     {
         Version = version,
+        SystemRunFilesystemScope = _settings.SystemRunFilesystemScope,
+        SystemRunPolicyFingerprint = _settings.SystemRunPolicyFingerprint,
         AutoStart = _settings.AutoStart,
         GlobalHotkeyEnabled = _settings.GlobalHotkeyEnabled,
         UseLegacyWebChat = _settings.UseLegacyWebChat,
@@ -173,7 +175,6 @@ internal sealed class SettingsStore : ISettingsStore
         CameraRecordingConsentGiven = _settings.CameraRecordingConsentGiven,
         LocationConsentGiven = _settings.LocationConsentGiven,
         ShowChatToolCalls = _settings.ShowChatToolCalls,
-        SystemRunSandboxEnabled = _settings.SystemRunSandboxEnabled,
     };
 
     private void ThrowIfDisposed()
@@ -186,6 +187,7 @@ internal sealed class SettingsStore : ISettingsStore
         private readonly SettingsManager _settings;
 
         public Editor(SettingsManager settings) => _settings = settings;
+        public void ApplySystemRunPreset(OpenClaw.Shared.SystemRunAccessPreset preset) => _settings.ApplySystemRunPreset(preset);
 
         public bool AutoStart { set => _settings.AutoStart = value; }
         public bool GlobalHotkeyEnabled { set => _settings.GlobalHotkeyEnabled = value; }

@@ -647,96 +647,25 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
     }
 
     /// <summary>
-    /// Build the <see cref="ICommandRunner"/> for system.run. Returns an
-    /// <see cref="MxcCommandRunner"/> wrapping <see cref="DirectAppContainerExecutor"/>.
-    /// The runner honors <see cref="SettingsData.SystemRunSandboxEnabled"/>
-    /// by requiring MXC containment when enabled, blocking if it is unavailable,
-    /// and rejecting unsupported sandbox request features while
-    /// sandboxing remains enabled.
+    /// Composes MXC execution with fresh platform protection. Only unsupported Windows uses host compatibility.
     /// </summary>
     private ICommandRunner BuildSystemRunRunner()
     {
-        var hostRunner = new LocalCommandRunner(_logger);
-        var executor = new DirectAppContainerExecutor(GetOrProbeMxcAvailability, _logger);
-
-        // Do NOT probe synchronously here: this runs while _capabilitiesLock is held
-        // (RegisterCapabilities), and a blocking wxc-exec --probe (~15s) would stall
-        // capability registration / reconnect. Log from a non-blocking peek; the
-        // first real probe happens lazily on the first system.run via the
-        // availability gate / executor provider below (off any of our locks).
-        var peeked = PeekMxcAvailability();
-        if (peeked is null)
-        {
-            _logger.Info(
-                $"[mxc] system.run runner = MxcCommandRunner " +
-                $"(executor={executor.Name}; MXC availability probe deferred to first use; " +
-                $"sandboxEnabled={(_settings?.SystemRunSandboxEnabled ?? true)})");
-        }
-        else if (peeked.CanRunSystemRunSandbox)
-        {
-            _logger.Info(
-                $"[mxc] system.run runner = MxcCommandRunner " +
-                $"(executor={executor.Name}, sandboxEnabled={(_settings?.SystemRunSandboxEnabled ?? true)})");
-        }
-        else
-        {
-            // An enabled sandbox denies execution until containment recovers.
-            var reason = string.Join("; ", peeked.SystemRunSandboxUnsupportedReasons);
-            var unavailableMode = (_settings?.SystemRunSandboxEnabled ?? true)
-                ? "commands will be blocked while Node Sandbox is on"
-                : "commands will run on the host because Node Sandbox is off";
-            _logger.Info($"[mxc] system.run runner = MxcCommandRunner (BaseContainer unavailable, {unavailableMode}: {reason})");
-        }
-
+        // Admission is deferred, never probed under the capability-registration lock.
         var settingsDirectory = SettingsManager.SettingsDirectoryPath;
         return new MxcCommandRunner(
-            executor,
-            hostRunner,
             () => SnapshotSettings(),
             () => settingsDirectory,
-            // Re-probe on demand when sandbox availability is checked: returns the
-            // cached definitive verdict, or re-probes (single-flight) after a
-            // transient error / a prior SandboxUnavailableException-driven invalidation.
-            () => GetOrProbeMxcAvailability().CanRunSystemRunSandbox,
-            invalidateAvailability: InvalidateMxcAvailability,
-            _logger);
+            GetOrProbeMxcAvailability,
+            _logger,
+            contextProvider: () => MxcWindowsRequestContext.Capture(settingsDirectory));
     }
 
     /// <summary>
     /// Snapshot the live <see cref="SettingsManager"/> into the wire-shaped
-    /// <see cref="SettingsData"/> that MxcCommandRunner / MxcPolicyBuilder consume.
-    /// Defensive default keeps sandbox enabled if _settings is null.
+    /// <see cref="SettingsData"/> consumed by the immutable request builder.
     /// </summary>
-    private SettingsData SnapshotSettings()
-    {
-        if (_settings is null)
-            return new SettingsData
-            {
-                SystemRunSandboxEnabled = true,
-                SystemRunAllowOutbound = false,
-                SystemRunAllowWindowsUi = false,
-            };
-
-        return new SettingsData
-        {
-            SystemRunSandboxEnabled = _settings.SystemRunSandboxEnabled,
-            SystemRunAllowOutbound = _settings.SystemRunAllowOutbound,
-            SystemRunAllowWindowsUi = _settings.SystemRunAllowWindowsUi,
-            // Sandbox page fields — read by MxcPolicyBuilder.ForSystemRun.
-            SandboxClipboard = _settings.SandboxClipboard,
-            SandboxDocumentsAccess = _settings.SandboxDocumentsAccess,
-            SandboxDownloadsAccess = _settings.SandboxDownloadsAccess,
-            SandboxDesktopAccess = _settings.SandboxDesktopAccess,
-            // Deep-copy each SandboxCustomFolder so a concurrent UI thread mutation of
-            // Access (between snapshot and policy build) can't race with us. The class
-            // is mutable so a shallow copy of the list would share references.
-            SandboxCustomFolders = _settings.SandboxCustomFolders is { Count: > 0 } src
-                ? src.Select(f => new SandboxCustomFolder { Path = f.Path, Access = f.Access }).ToList()
-                : null,
-            SandboxTimeoutMs = _settings.SandboxTimeoutMs,
-            SandboxMaxOutputBytes = _settings.SandboxMaxOutputBytes,
-        };
-    }
+    private SettingsData SnapshotSettings() => _settings?.SnapshotSystemRunSettings() ?? new();
 
     private MxcAvailability? _mxcAvailability;
     private DateTime _mxcNextProbeAllowedAtUtc;
@@ -745,7 +674,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
 
     /// <summary>
     /// Minimum interval before re-probing after a transient probe error. Bounds the
-    /// cost of re-spawning <c>wxc-exec --probe</c> while a probe error persists,
+    /// cost of retrying the native SDK probe while a load/probe error persists,
     /// while still letting a momentary glitch self-heal quickly.
     /// </summary>
     private static readonly TimeSpan MxcProbeRetryInterval = TimeSpan.FromSeconds(5);
@@ -755,10 +684,10 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
     /// (supported / host-unsupported) are cached for the process lifetime; a transient
     /// probe error (<see cref="MxcAvailability.ProbeErrored"/>) is NOT cached
     /// permanently — once the retry window opens we re-probe so a momentary glitch
-    /// doesn't keep commands blocked after containment has recovered.
+    /// doesn't pin the whole process to uncontained execution.
     /// </summary>
     /// <remarks>
-    /// The blocking probe (<c>wxc-exec --probe</c>, up to ~15s) is NEVER run while
+    /// The native SDK probe is NEVER run while
     /// holding <see cref="_mxcAvailabilityLock"/>: concurrent callers share a single
     /// in-flight probe (single-flight) and wait on it OUTSIDE the lock, so a slow
     /// probe can't serialize unrelated callers or stall lock users. The retry window
@@ -774,7 +703,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
             if (_mxcAvailability is { ProbeErrored: false } definitive)
                 return definitive;
 
-            // Transient error — keep serving it (blocks sandboxed commands) until the
+            // Transient error — keep serving it (routes to uncontained) until the
             // retry window opens, so we don't re-probe on every command.
             if (_mxcAvailability is { ProbeErrored: true } errored
                 && _mxcProbeInFlight is null
@@ -802,7 +731,7 @@ public sealed class NodeService : IDisposable, IAsyncDisposable
             // poison the single-flight slot or leak out of the shared task.
             _logger.Warn($"[mxc] availability probe threw unexpectedly: {ex.GetType().Name}: {ex.Message}");
             result = new MxcAvailability(
-                false, false, false, null,
+                false, false, false,
                 new[] { "MXC availability probe failed unexpectedly." }, probeErrored: true);
         }
 

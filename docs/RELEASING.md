@@ -187,9 +187,11 @@ Before tagging the coordinated release or claiming issue #1374 complete:
   fixture screenshots, and locally test-signed packages do not replace missing
   signed-package, ARM64, accessibility, or gateway continuity proof.
 
-These are tag-time gates, not merge-time gates. The switch is checked in as `true`
+These are release-acceptance gates, not merge-time gates. The switch is checked in as `true`
 so the coordinated release and its CI artifacts carry migration, but a tag must not
 be published until each item above is satisfied against that tag's real artifacts.
+The controlled alpha-promotion path below may reserve an immutable tag to build
+those artifacts, but cannot publish the stable GitHub release until acceptance.
 If acceptance fails before the Store package is published, set
 `MigrationProductionEnabled` to `false` and retag rather than shipping an unverified
 launch gate. A synthetic source floor supplied for disposable package testing is not
@@ -377,6 +379,148 @@ enablement remain release gates. The source floor and Store listing ID are
 assigned above; UI tests with fake operations are not package-boundary or real
 migration proof.
 
+## Promote a published alpha to stable
+
+Use **Actions > Promote alpha to stable**, on **main**, to select a published
+`vX.Y.Z-alpha.N` candidate. This is an additional supported release path: it
+promotes an approved ancestor of main instead of including every newer commit.
+The stable target is always `vX.Y.Z`. Arbitrary version changes, correction
+promotion, and Partner Center submission are not supported by this workflow.
+
+Start with `prepare=false` (the default). The read-only preview checks the exact
+alpha SHA, its successful canonical release run and required jobs, ancestry,
+stable ordering, and published target availability. It links the included changes since
+the previous stable release and the newer main changes excluded. Preview does
+not reserve tags or MSIX versions, sign packages, or publish anything.
+The read-only workflow token cannot discover private draft conflicts.
+Preparation checks unrelated or duplicate drafts before reserving the tag.
+
+```powershell
+gh workflow run promote-alpha-release.yml `
+  --repo openclaw/openclaw-windows-node --ref main `
+  -f alpha_tag=v2026.9.5-alpha.93 -f prepare=false
+```
+
+Before preparing a release, a repository administrator must create the
+**stable-release** environment with required reviewers and administrator bypass
+disabled. Restrict its deployment branches to `main`. For normal reviewers,
+enable **Prevent self-review**. To let OpenClaw release managers publish without
+a separate reviewer, set the only required reviewer to
+`openclaw/release-managers-openclaw` (team ID `16590423`) and disable
+**Prevent self-review**. GitHub enforces team membership for approval; members
+may approve their own run, including through their authorized release agent.
+Other teams, individual reviewers, or additional reviewers cannot use this
+self-review exception. Missing or weaker protection fails before any tag is
+created.
+The existing `release-signing` environment is still used for Azure OIDC signing;
+it is not a substitute for this final acceptance approval.
+
+Rerun with `prepare=true` to authorize reservation and building:
+
+```powershell
+gh workflow run promote-alpha-release.yml `
+  --repo openclaw/openclaw-windows-node --ref main `
+  -f alpha_tag=v2026.9.5-alpha.93 -f prepare=true
+```
+
+The workflow freezes two different revisions. The candidate SHA owns product
+source, tests, build scripts, and Inno installer inputs. The dispatch SHA on main
+owns release policy, validation orchestration, signing checks, MSIX allocation,
+and publication. The local reusable workflow reference binds CI to that same
+pipeline revision. No main product files are copied into the candidate tree.
+Incompatible historical source fails normally; do not silently patch the alpha
+or replace its SHA with main to make it pass.
+
+Preparation creates a checkout-only stable tag in each candidate build/test
+workspace so GitVersion resolves the stable version without project-version
+overrides. These refs are never pushed and do not change versioning on main.
+The full CI Gate remains mandatory. Only after protected publication approval
+and artifact verification does publication create the public annotated stable
+tag with immutable promotion provenance. It uses `GITHUB_TOKEN`, whose ref
+creation does not trigger another tag-push workflow. Do not replace it with a
+PAT or dispatch CI on the old candidate tag: that would execute the historical
+workflow instead of the selected pipeline.
+
+The existing MSIX allocator reserves a new package version for the stable tag,
+shared by both architectures. Promotion rechecks candidate eligibility and
+approval protection, then the allocator verifies the existing same-base alpha
+tag resolves to the exact source SHA on every allocation attempt. Its metadata
+records the future stable ref without requiring that public tag during
+preparation. Ordinary release allocations still require their exact public
+source tag. Neither the alpha package version nor an existing
+published stable release is reused. The result is the same **source**, not
+identical bytes: versions, signatures, build tools, and restored dependencies
+can differ. Use the recorded pipeline revision and build logs when investigating
+toolchain differences, and validate the newly built artifacts.
+
+After CI, signing, and package validation, `alpha-promotion-<attempt>` contains the
+prepared installers, portable ZIPs, signed Dev MSIX ZIPs, and `promotion.json`.
+Unsigned Store submission packages remain separate workflow artifacts, matching
+the normal release path. Dev ZIPs include their public certificates, provenance,
+and installation instructions; they are not Microsoft Store-signed packages.
+The manifest records source and pipeline SHAs, original alpha CI, previous
+stable, preparation run/attempt, MSIX reservation, and every asset's SHA-256.
+The job summary presents this manifest before the **stable-release** review.
+Record links to the required acceptance evidence in the environment review.
+For `v2026.9.5`, this includes the coordinated migration proof above on exact
+signed x64 and ARM64 packages. A Store listing or a green CI badge is not that
+proof. Do not approve a run with missing acceptance.
+
+Ordinary same-repository publication uses `GITHUB_TOKEN` with **Contents: write**.
+An extra publication credential is needed only when the candidate adds or
+modifies files under `.github/workflows/` relative to current main. Older product
+code or workflow deletions alone do not require it. The publication owner checks
+complete Git trees before creating any public tag and fails closed if that
+permission check cannot complete. GitHub's
+[release API authorization contract](https://docs.github.com/en/rest/releases/releases#update-a-release)
+requires **Workflows: write** for that historical-workflow exception, which
+`GITHUB_TOKEN` cannot receive. For those candidates only, configure
+`STABLE_RELEASE_TOKEN` as an environment secret in `stable-release`, using a
+GitHub App installation token or fine-grained token restricted to this repository
+with **Contents: write** and **Workflows: write**. The protected token is used
+only for draft creation and final release publication, never for Git refs,
+candidate builds, or eligibility checks. Tag creation and asset uploads continue
+to use `GITHUB_TOKEN`, so historical tag workflows are not triggered. Missing or
+malformed exception credentials, or substituted workflow tokens, block before
+tag creation. Protected publication approval is required in both cases.
+
+Approval publishes the exact prepared artifact ID, not a rebuild. Under the
+shared release-publication lock, CI rechecks source tags, Latest ordering,
+approval protection, and hashes, uploads to a private draft, verifies the
+uploaded digest set, then marks the release stable and Latest. Release notes
+compare the previous stable tag to the chosen candidate, not to current main.
+`promotion.json` is attached permanently to the published release. This does not
+modify, resubmit, or claim acceptance of the package already in Microsoft Store.
+
+### Promotion retry and cancellation
+
+- Preview can be repeated without side effects. The initial alpha release and
+  its successful CI evidence must remain available while promotion is pending.
+- An unpublished stable tag can be reused only with identical annotation,
+  candidate, previous stable, and pipeline provenance. Resume the original
+  workflow run if main has advanced. A new pipeline cannot silently adopt an
+  older reservation. Published targets are never replaced or moved.
+- Failed or cancelled preparation, or rejected/cancelled approval, creates no
+  public stable tag and does not advance subsequent main alphas. The separate
+  MSIX package-version reservation remains consumed to preserve monotonicity.
+- Once approval is granted and publication starts, the public stable tag is
+  created immediately before draft creation and uploads. A failure or cancellation
+  in that publication window retains the tag and any partial draft for an exact
+  retry; main alphas can then advance. Do not remove or move a publication tag.
+- Rerun failed jobs to reuse the exact prepared artifact after a partial upload.
+  A rerun that rebuilds outputs creates a new attempt artifact and requires new
+  approval. An existing draft bound to different bytes blocks publication;
+  inspect and explicitly remove only that unpublished draft before retrying.
+  Duplicate drafts for the target tag also block publication.
+- If publication succeeds but final verification fails, do not rerun or replace
+  the release. Confirm it is published, non-prerelease, and Latest, and verify
+  every uploaded asset's size and SHA-256 against the approved manifest.
+  Record that verification in the run's acceptance evidence before closing it.
+- A newer stable publication, moved candidate, changed acceptance protection,
+  missing/expired evidence, or mismatched artifact stops publication. Pending
+  promotion artifacts expire after 30 days. Restart acceptance for rebuilt
+  artifacts rather than treating an expired approval as reusable proof.
+
 ## Release checklist
 
 1. Start clean on current `main`.
@@ -399,7 +543,8 @@ migration proof.
      "Stage signed Dev MSIX release assets"
    ```
 
-3. Create a new stable, stable correction, or prerelease tag from `origin/main`.
+3. For a direct release, create a new stable, stable correction, or prerelease tag from `origin/main`.
+   For an existing published alpha, use the controlled promotion workflow above.
    Never move a previously published tag.
 
    ```powershell
@@ -665,6 +810,27 @@ Running **Build and Test** manually on a branch is still build-only. Running
 it on an eligible alpha tag uses the same tagged release path. No new
 unreviewed-branch or MSIX-only version allocator is introduced.
 
+## Retired npm MXC payload upgrade cleanup
+
+The 0.8 npm bridge shipped exactly `wxc-exec.exe` and `wslcsdk.dll` under
+`tools\mxc\x64` and `tools\mxc\arm64`. Inno removes those four known files,
+then removes only empty known directories. It does not remove unknown files,
+user settings, gateways, credentials, approvals or unrelated Node installations.
+The new SDK's app-root `wslcsdk.dll` is required and must remain.
+
+Portable ZIPs are also in-app Updatum payloads. Updatum 1.3.4 copies over the
+destination with robocopy `/E /COPY:DAT` (or xcopy), not a mirror; destination-only
+legacy files survive. The new unpackaged app therefore delegates idempotent
+exact-file cleanup to `LegacyMxcFiles` after primary-instance admission. It
+refuses reparse traversal and logs coarse failures. Packaged app versions are
+OS-managed and are never deleted by this cleanup.
+
+Build/publish targets remove these exact stale artifacts from incremental output,
+and Store/Dev package verification and release signature classification reject
+them if present. Run `.\scripts\test-legacy-mxc-payload.ps1` and
+`.\scripts\test-msix-ci-artifacts.ps1` for synthetic fixtures. These checks do not
+substitute for a real old-to-new installer/in-app update smoke.
+
 ## Binary signing policy
 
 Only OpenClaw-owned binaries should be signed by the OpenClaw release signing
@@ -683,10 +849,19 @@ OpenClaw-owned binaries:
 
 Third-party/runtime executables that must not be OpenClaw-signed:
 
-- `tools\mxc\<arch>\wxc-exec.exe`
+- `plm.exe`
+- `wxc-wslc-daemon.exe`
 - `createdump.exe`
 - `RestartAgent.exe`
 - `SetupEngine\RestartAgent.exe`
+
+The exact `Microsoft.Mxc.Sdk` 1.0.0 NuGet dependency supplies both supported RIDs
+(`win-x64`, `win-arm64`). Published app roots must contain
+`Microsoft.Mxc.Sdk.dll`, `mxc_ffi.dll`, `wslcsdk.dll`, `plm.exe` and
+`wxc-wslc-daemon.exe`. Neither MXC helper may be signed with an OpenClaw
+certificate. Root npm manifests, EXE discovery and `tools\mxc` copy targets are
+retired. Actual MSIX, installer, SAC and ARM64 native proof remain separate
+release gates; an x64 build is not evidence for those gates.
 
 CI enforces this with `scripts\Test-ReleaseExecutableSignatures.ps1`. The
 verifier inspects every shipped `.exe` and `.dll`, fails closed on unknown
@@ -831,7 +1006,8 @@ gh run list --repo openclaw/openclaw-windows-node `
   --limit 10
 ```
 
-Only tag when `HEAD == origin/main`.
+For direct releases, only tag when `HEAD == origin/main`. An older alpha may
+only receive a stable tag through the controlled promotion workflow above.
 
 ## Versioning rules
 

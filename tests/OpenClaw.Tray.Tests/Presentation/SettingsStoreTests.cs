@@ -10,6 +10,51 @@ namespace OpenClaw.Tray.Tests.Presentation;
 public sealed class SettingsStoreTests
 {
     [Fact]
+    public void HostedSetupInitializesBalancedOnceAndPreservesCustomEditsAcrossResume()
+    {
+        using var store = NewStore(out var settings, out _, out var temp);
+        using (temp)
+        {
+            var setup = new SetupSettingsWriter(store);
+            setup.Apply(new Dictionary<string, bool>(), OpenClaw.Shared.SystemRunAccessPreset.Balanced, initializationOnly: true);
+            Assert.Equal(OpenClaw.Shared.SystemRunFilesystemScope.UserFilesReadOnly, settings.SystemRunFilesystemScope);
+            Assert.True(settings.SystemRunAllowOutbound);
+            Assert.Empty(settings.SandboxCustomFolders);
+            settings.SystemRunFilesystemScope = OpenClaw.Shared.SystemRunFilesystemScope.SelectedFolders;
+            settings.SandboxCustomFolders =
+                [new() { Path = @"C:\selected", Access = OpenClaw.Shared.SandboxFolderAccess.ReadOnly }];
+            settings.SandboxClipboard = OpenClaw.Shared.SandboxClipboardMode.Both;
+            settings.SaveOrThrow();
+            var fingerprint = settings.SystemRunPolicyFingerprint;
+            setup.Apply(new Dictionary<string, bool>(), OpenClaw.Shared.SystemRunAccessPreset.Balanced, initializationOnly: true);
+            Assert.Equal(fingerprint, settings.SystemRunPolicyFingerprint);
+            var resumed = new SetupSettingsWriter(store);
+            resumed.Apply(new Dictionary<string, bool>(), OpenClaw.Shared.SystemRunAccessPreset.Balanced, initializationOnly: true);
+            Assert.Equal(fingerprint, settings.SystemRunPolicyFingerprint);
+        }
+    }
+
+    [Fact]
+    public void HostedSetupExplicitPresetRejectsStalePermissionIntentBeforeOtherWrites()
+    {
+        using var store = NewStore(out var settings, out _, out var temp);
+        using (temp)
+        {
+            var setup = new SetupSettingsWriter(store);
+            settings.SandboxCustomFolders =
+                [new() { Path = @"C:\selected", Access = OpenClaw.Shared.SandboxFolderAccess.ReadOnly }];
+            settings.SaveOrThrow();
+            var fingerprint = settings.SystemRunPolicyFingerprint;
+            var nodeMode = settings.EnableNodeMode;
+            Assert.Throws<InvalidOperationException>(() => setup.Apply(
+                new Dictionary<string, bool> { ["EnableNodeMode"] = !nodeMode },
+                OpenClaw.Shared.SystemRunAccessPreset.Open));
+            Assert.Equal(nodeMode, settings.EnableNodeMode);
+            Assert.Equal(fingerprint, settings.SystemRunPolicyFingerprint);
+        }
+    }
+
+    [Fact]
     public async Task HostedSetupSerializesWithBackgroundSettingsMutationWithoutLosingUnrelatedFields()
     {
         using var store = NewStore(out var settings, out _, out var temp);
@@ -114,13 +159,11 @@ public sealed class SettingsStoreTests
         {
             settings.GlobalHotkeyEnabled = true;
             settings.NotificationSound = "Subtle";
-            settings.SystemRunSandboxEnabled = true;
 
             var snapshot = store.Current;
 
             Assert.True(snapshot.GlobalHotkeyEnabled);
             Assert.Equal("Subtle", snapshot.NotificationSound);
-            Assert.True(snapshot.SystemRunSandboxEnabled);
             Assert.Equal(0, snapshot.Version);
         }
     }

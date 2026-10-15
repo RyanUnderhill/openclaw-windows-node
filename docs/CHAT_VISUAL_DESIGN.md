@@ -113,13 +113,13 @@ chevron with a 44-pixel target, retaining the full textual automation name and
 tooltip. Below 400 pixels the session trigger uses its existing Sessions icon,
 so Attach, Node Sandbox, session, model, effort, voice and Send all remain reachable.
 The [Node Sandbox icon](design/reference/concepts/states/node-sandbox.md) beside
-the microphone in the right-hand action group is blue when the saved setting is
-on and gray when off. It opens a compact native flyout with an On/Off header,
-one short explanation, and a Sandbox settings action, not a toggle.
-The flyout says "Commands on this Windows node run in a sandbox" when On and
-"Commands on this Windows node run without a sandbox" when Off. Enabled
-`system.run` requires containment and blocks if it is unavailable; it never
-falls back to host execution. This does not describe Gateway tools. Settings changes
+the microphone in the right-hand action group is blue when the latest SDK probe
+supports containment and gray otherwise. It opens a compact native flyout with
+Available, Compatibility, Unavailable, Checking, or Tools off status and a Sandbox
+settings action, not a toggle. Compatibility warns about approved uncontained
+execution on positively unsupported Windows. Failed/uncertain probes never imply
+compatibility; the runner independently admits each command. This does not describe
+Gateway tools or per-command results. Status and system-tools setting changes
 refresh both mounted native composers without replacing drafts or attachments.
 The compact effort trigger has a transparent idle background and the same
 4-pixel interaction corners as the other toolbar controls. Its gauge and

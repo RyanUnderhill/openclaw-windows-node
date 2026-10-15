@@ -23,19 +23,24 @@ public sealed class ChatComposerSession : IDisposable
     private int _disposed;
     private long _inputRevision;
     private readonly ISettingsStore _settingsStore;
+    private readonly SandboxStatusStore _sandboxStatus;
 
     internal ChatComposerSession(
         ChatComposerViewModel viewModel,
         ChatComposerController controller,
         ChatComposerHostActions hostActions,
-        ISettingsStore settingsStore)
+        ISettingsStore settingsStore,
+        SandboxStatusStore sandboxStatus)
     {
         ViewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
         Controller = controller ?? throw new ArgumentNullException(nameof(controller));
         HostActions = hostActions ?? throw new ArgumentNullException(nameof(hostActions));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
+        _sandboxStatus = sandboxStatus ?? throw new ArgumentNullException(nameof(sandboxStatus));
         _settingsStore.Changed += OnSettingsChanged;
+        _sandboxStatus.Changed += OnSandboxStatusChanged;
         ViewModel.ApplySandboxSettings(_settingsStore.Current);
+        ViewModel.ApplySandboxStatus(_sandboxStatus.Current);
     }
 
     internal ChatComposerViewModel ViewModel { get; }
@@ -46,6 +51,9 @@ public sealed class ChatComposerSession : IDisposable
 
     private void OnSettingsChanged(object? sender, SettingsChangedEventArgs args) =>
         ViewModel.ApplySandboxSettings(args.Snapshot);
+
+    private void OnSandboxStatusChanged(object? sender, SandboxStatusSnapshot snapshot) =>
+        ViewModel.ApplySandboxStatus(snapshot);
 
     /// <summary>Applies the latest committed immutable projection with a
     /// session-monotonic revision that survives composer view remounts.</summary>
@@ -63,6 +71,7 @@ public sealed class ChatComposerSession : IDisposable
             return;
 
         _settingsStore.Changed -= OnSettingsChanged;
+        _sandboxStatus.Changed -= OnSandboxStatusChanged;
         Controller.Dispose();
         ViewModel.Dispose();
     }

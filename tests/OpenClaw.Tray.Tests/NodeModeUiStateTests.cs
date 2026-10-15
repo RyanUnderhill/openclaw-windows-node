@@ -176,14 +176,13 @@ public sealed class NodeModeUiStateTests
     }
 
     [Fact]
-    public void NodeService_MxcSettingsSnapshotIncludesWindowsUiAccess()
+    public void NodeService_UsesAuthoritativeMxcSettingsSnapshot()
     {
         var service = ReadSource("src", "OpenClaw.Tray.WinUI", "Services", "NodeService.cs");
-        var snapshot = ExtractMethodBody(service, "SnapshotSettings");
-
-        Assert.Contains(
-            "SystemRunAllowWindowsUi = _settings.SystemRunAllowWindowsUi",
-            snapshot);
+        var settings = ReadSource("src", "OpenClaw.Tray.WinUI", "Services", "SettingsManager.cs");
+        Assert.Contains("_settings?.SnapshotSystemRunSettings()", service);
+        Assert.Contains("MxcRequestBuilder.Snapshot(_data)", settings);
+        Assert.DoesNotContain("SystemRunAllowWindowsUi", service);
     }
 
     [Fact]

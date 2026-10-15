@@ -10,6 +10,7 @@ using Microsoft.UI.Xaml.Media;
 using OpenClaw.Chat;
 using OpenClaw.Shared;
 using OpenClawTray.Helpers;
+using OpenClawTray.Presentation;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -410,7 +411,9 @@ internal sealed class ReactorChatComposer : Component<ReactorChatComposerViewPro
                 PlaceholderFor(inputs.ConnectionState))
             .AutomationId("ChatComposerInput")
             .AutomationName(PlaceholderFor(inputs.ConnectionState))
-            .OnKeyDown((sender, args) =>
+            // Multiline TextBox consumes Enter before bubbling KeyDown. Handle
+            // composer shortcuts in preview so only Shift+Enter inserts a newline.
+            .OnPreviewKeyDown((sender, args) =>
             {
                 if (slashDisplay.IsVisible)
                 {
@@ -580,18 +583,28 @@ internal sealed class ReactorChatComposer : Component<ReactorChatComposerViewPro
             () => props.Session.HostActions.AttachmentPickerRequest?.Invoke(),
             props.Session.HostActions.AttachmentPickerRequest is not null,
             "ChatComposerAttach");
-        var sandboxTitle = vm.SandboxEnabled
-            ? Localized("Chat_Composer_Sandbox_On", "Node Sandbox setting: On")
-            : Localized("Chat_Composer_Sandbox_Off", "Node Sandbox setting: Off");
-        var sandboxDescription = vm.SandboxEnabled
-            ? Localized("Chat_Composer_Sandbox_OnDescription",
-                "Commands on this Windows node run in a sandbox.")
-            : Localized("Chat_Composer_Sandbox_OffDescription",
-                "Commands on this Windows node run without a sandbox.");
-        var sandboxState = vm.SandboxEnabled
-            ? Localized("Chat_Composer_Sandbox_StateOn", "On")
-            : Localized("Chat_Composer_Sandbox_StateOff", "Off");
-        var sandboxForeground = vm.SandboxEnabled ? "ChatSandboxOnBrush" : "ChatSecondaryTextBrush";
+        var sandboxState = vm.SandboxStatus switch
+        {
+            SandboxStatus.Available => Localized("Chat_Composer_Sandbox_Available", "Available"),
+            SandboxStatus.Compatibility => Localized("Chat_Composer_Sandbox_Compatibility", "Compatibility"),
+            SandboxStatus.Unavailable => Localized("Chat_Composer_Sandbox_Unavailable", "Unavailable"),
+            SandboxStatus.Disabled => Localized("Chat_Composer_Sandbox_Disabled", "Tools off"),
+            _ => Localized("Chat_Composer_Sandbox_Checking", "Checking"),
+        };
+        var sandboxDescription = vm.SandboxStatus switch
+        {
+            SandboxStatus.Available => Localized("Chat_Composer_Sandbox_AvailableDescription",
+                "Windows supports sandboxing. Each command is checked before it runs."),
+            SandboxStatus.Compatibility => Localized("Chat_Composer_Sandbox_CompatibilityDescription",
+                "This Windows version does not support sandboxing. Approved commands run without it."),
+            SandboxStatus.Unavailable => Localized("Chat_Composer_Sandbox_UnavailableDescription",
+                "Sandboxing could not be verified. Commands are blocked."),
+            SandboxStatus.Disabled => Localized("Chat_Composer_Sandbox_DisabledDescription",
+                "System tools are off. Commands cannot run on this node."),
+            _ => Localized("Chat_Composer_Sandbox_CheckingDescription", "Checking Windows sandbox support."),
+        };
+        var sandboxTitle = $"{Localized("Chat_Composer_Sandbox_Title", "Node Sandbox")}: {sandboxState}";
+        var sandboxForeground = vm.SandboxStatus == SandboxStatus.Available ? "ChatSandboxOnBrush" : "ChatSecondaryTextBrush";
         var sandboxSettingsLabel = Localized("Chat_Composer_Sandbox_OpenSettings", "Sandbox settings");
         var sandboxButton = Flyout(
             IconButton(FluentIconCatalog.Sandbox, sandboxTitle, () => { },

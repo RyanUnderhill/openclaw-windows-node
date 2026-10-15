@@ -189,32 +189,17 @@ public record class SettingsData
 
     // ── MXC sandbox ─────────────────────────────────────────────────────
     /// <summary>
-    /// Master switch for system.run containment. When <c>true</c> (default),
-    /// system.run requires MXC containment and blocks if MXC is unavailable. Unsupported
-    /// sandbox request features are rejected while sandboxing remains enabled.
-    /// When <c>false</c>, system.run always runs on the host as it did before
-    /// MXC support was added.
+    /// Personal-file scope. Missing legacy values retain only existing selected grants.
+    /// Broad scopes are explicit intent, not permission to bypass containment.
     /// </summary>
-    public bool SystemRunSandboxEnabled { get; set; } = true;
-
-    /// <summary>
-    /// Legacy persisted preference retained for file compatibility. No longer affects
-    /// execution: enabled sandboxing always blocks when containment is unavailable.
-    /// </summary>
-    public bool SystemRunBlockHostFallbackWhenMxcUnavailable { get; set; } = false;
+    [JsonIgnore(Condition = JsonIgnoreCondition.Never)]
+    public SystemRunFilesystemScope? SystemRunFilesystemScope { get; set; }
 
     /// <summary>
     /// When sandboxed, allow system.run commands to reach the public internet.
     /// Default false — most shell commands are local-only.
     /// </summary>
     public bool SystemRunAllowOutbound { get; set; } = false;
-
-    /// <summary>
-    /// When sandboxed, allow system.run commands to use Windows UI system calls.
-    /// This is required by PowerShell and some console utilities on current MXC
-    /// processcontainer backends. Default false preserves Win32k syscall blocking.
-    /// </summary>
-    public bool SystemRunAllowWindowsUi { get; set; } = false;
 
     /// <summary>
     /// Clipboard access policy inside the sandbox. Default <c>None</c> — the
@@ -225,7 +210,7 @@ public record class SettingsData
     /// <summary>
     /// Per-folder access grants. Each well-known user folder can be
     /// individually opened to the sandbox in read-only or read-write mode.
-    /// Default for all: <c>null</c> (blocked).
+    /// Default for all: <c>null</c> (no additional grant beyond the selected scope).
     /// </summary>
     public SandboxFolderAccess? SandboxDocumentsAccess { get; set; }
     public SandboxFolderAccess? SandboxDownloadsAccess { get; set; }

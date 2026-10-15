@@ -42,6 +42,7 @@ internal static class AppServiceRegistration
         // Settings facade over the App-owned SettingsManager. Container-owned so it can dispose
         // its Saved-event subscription during shutdown.
         services.AddSingleton<ISettingsStore, SettingsStore>();
+        services.AddSingleton<SandboxStatusStore>();
         services.AddSingleton<IPermissionsPageRuntimeSource, PermissionsPageRuntimeSource>();
         services.AddSingleton<IHostHardwareProbe, CudaHostHardwareProbe>();
 

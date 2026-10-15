@@ -309,7 +309,7 @@
       "y": 785,
       "width": 390,
       "height": 85,
-      "text": "MxcCommandRunner\nOn: MXC or block\nOff: host execution",
+      "text": "MxcCommandRunner\nSDK request + BaseContainer admission\nMXC only, or explicit block",
       "fontSize": 17,
       "fontFamily": 1,
       "strokeColor": "#000000",

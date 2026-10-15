@@ -88,6 +88,9 @@ internal sealed class ChatComposerViewModel : INotifyPropertyChanged, IDisposabl
     private ChatComposerInputs? _inputs;
     private long _latestInputsRevision;
     private long _sandboxSettingsVersion = -1;
+    private long _sandboxStatusVersion = -1;
+    private bool _systemRunEnabled = true;
+    private SandboxStatus _sandboxAvailability = SandboxStatus.Checking;
 
     public ChatComposerViewModel(IUiDispatcher dispatcher, bool initialSpeakerMuted)
     {
@@ -114,7 +117,7 @@ internal sealed class ChatComposerViewModel : INotifyPropertyChanged, IDisposabl
     public ReactorSlashMenuState SlashMenuState => _slashMenuState;
     public ReactorSlashDisplayState SlashDisplay { get; private set; }
     public ChatComposerInputs? Inputs => _inputs;
-    public bool SandboxEnabled { get; private set; }
+    public SandboxStatus SandboxStatus => _systemRunEnabled ? _sandboxAvailability : SandboxStatus.Disabled;
 
     public void ApplySandboxSettings(SettingsSnapshot snapshot)
     {
@@ -124,10 +127,25 @@ internal sealed class ChatComposerViewModel : INotifyPropertyChanged, IDisposabl
             if (snapshot.Version <= _sandboxSettingsVersion)
                 return false;
             _sandboxSettingsVersion = snapshot.Version;
-            if (SandboxEnabled == snapshot.SystemRunSandboxEnabled)
+            if (_systemRunEnabled == snapshot.NodeSystemRunEnabled)
                 return false;
 
-            SandboxEnabled = snapshot.SystemRunSandboxEnabled;
+            _systemRunEnabled = snapshot.NodeSystemRunEnabled;
+            return true;
+        });
+    }
+
+    public void ApplySandboxStatus(SandboxStatusSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        MutateIfChanged(() =>
+        {
+            if (snapshot.Version <= _sandboxStatusVersion)
+                return false;
+            _sandboxStatusVersion = snapshot.Version;
+            if (_sandboxAvailability == snapshot.Status)
+                return false;
+            _sandboxAvailability = snapshot.Status;
             return true;
         });
     }

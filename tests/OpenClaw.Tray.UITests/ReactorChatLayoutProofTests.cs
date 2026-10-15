@@ -44,7 +44,9 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
     public async Task SandboxFlyout_ReflectsSettingsWithoutChangingDraftAndOpensSettings(int width, bool showSessionPicker)
     {
         using var temp = new TempDirectory();
-        var settings = new SettingsManager(temp.Path) { SystemRunSandboxEnabled = true };
+        var settings = new SettingsManager(temp.Path) { NodeSystemRunEnabled = true };
+        var sandboxStatus = new SandboxStatusStore();
+        sandboxStatus.Publish(new(true, false, true, [], isolationTier: "base-container", supportsProtectedPathDenies: true));
         var navigationCount = 0;
         var saveCount = 0;
         settings.Saved += (_, _) => saveCount++;
@@ -60,7 +62,7 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
                 composerContent = Ancestors(originalInput).OfType<Border>()
                     .First(border => border.CornerRadius.TopLeft == ChatVisuals.ComposerRadius);
                 var button = FindControl<Button>(surface, "ChatComposerSandbox");
-                Assert.Equal("Node Sandbox setting: On", AutomationProperties.GetName(button));
+                Assert.Equal("Node Sandbox: Available", AutomationProperties.GetName(button));
                 var icon = Assert.Single(FindDescendants<TextBlock>(button));
                 Assert.Equal(FluentIconCatalog.Sandbox, icon.Text);
                 onColor = Assert.IsType<SolidColorBrush>(icon.Foreground).Color;
@@ -83,27 +85,26 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
             {
                 var button = FindControl<Button>(surface, "ChatComposerSandbox");
                 var popup = Assert.IsAssignableFrom<FrameworkElement>(Assert.IsType<Flyout>(button.Flyout).Content);
-                Assert.Equal("Commands on this Windows node run in a sandbox.",
+                Assert.Equal("Windows supports sandboxing. Each command is checked before it runs.",
                     FindControl<TextBlock>(popup, "ChatSandboxDescription").Text);
                 Assert.InRange(popup.ActualWidth, 1, 280);
                 Assert.InRange(popup.ActualHeight, 1, 220);
                 Assert.Equal(0, saveCount);
                 Assert.Equal(Draft, session.ViewModel.Draft);
-                settings.SystemRunSandboxEnabled = false;
-                settings.Save();
+                sandboxStatus.Publish(new(false, false, true, [], isWindowsUnsupported: true));
             });
             await SettleAsync();
             await ui.RunOnUIAsync(() =>
             {
                 var button = FindControl<Button>(surface, "ChatComposerSandbox");
                 var popup = Assert.IsAssignableFrom<FrameworkElement>(Assert.IsType<Flyout>(button.Flyout).Content);
-                Assert.Equal("Node Sandbox setting: Off", AutomationProperties.GetName(button));
+                Assert.Equal("Node Sandbox: Compatibility", AutomationProperties.GetName(button));
                 var offColor = Assert.IsType<SolidColorBrush>(
                     Assert.Single(FindDescendants<TextBlock>(button)).Foreground).Color;
                 if (Environment.GetEnvironmentVariable("OPENCLAW_PROOF_THEME") != "HighContrast")
                     Assert.NotEqual(onColor, offColor);
-                Assert.Equal("Off", FindControl<TextBlock>(popup, "ChatSandboxStatus").Text);
-                Assert.Equal("Commands on this Windows node run without a sandbox.",
+                Assert.Equal("Compatibility", FindControl<TextBlock>(popup, "ChatSandboxStatus").Text);
+                Assert.Equal("This Windows version does not support sandboxing. Approved commands run without it.",
                     FindControl<TextBlock>(popup, "ChatSandboxDescription").Text);
                 Assert.Same(originalInput, FindControl<TextBox>(surface, "ChatComposerInput"));
                 Assert.Equal(Draft, session.ViewModel.Draft);
@@ -114,12 +115,11 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
             await ui.RunOnUIAsync(() => Invoke(FindControl<Button>(popupContent!, "ChatSandboxOpenSettings")));
             await SettleAsync();
             Assert.Equal(1, navigationCount);
-            Assert.Equal(1, saveCount);
+            Assert.Equal(0, saveCount);
 
             await ui.RunOnUIAsync(() =>
             {
-                settings.SystemRunSandboxEnabled = true;
-                settings.Save();
+                sandboxStatus.Publish(new(false, false, false, [], probeErrored: true));
             });
             await SettleAsync();
             await ui.RunOnUIAsync(() =>
@@ -132,7 +132,7 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
             {
                 var popup = Assert.IsAssignableFrom<FrameworkElement>(
                     Assert.IsType<Flyout>(FindControl<Button>(surface, "ChatComposerSandbox").Flyout).Content);
-                Assert.Equal("Commands on this Windows node run in a sandbox.",
+                Assert.Equal("Sandboxing could not be verified. Commands are blocked.",
                     FindControl<TextBlock>(popup, "ChatSandboxDescription").Text);
                 AssertComposerBounds(surface, showSessionPicker);
                 popupContent = popup;
@@ -140,7 +140,8 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
             await CaptureAsync(composerContent!, $"Sandbox-on-composer-{width}");
             await CaptureAsync(popupContent!, $"Sandbox-on-flyout-{width}");
             await ui.RunOnUIAsync(() => FindControl<Button>(surface, "ChatComposerSandbox").Flyout.Hide());
-        }, sandboxSettings: settings, onSandboxSettings: () => navigationCount++, showSessionPicker: showSessionPicker);
+        }, sandboxSettings: settings, onSandboxSettings: () => navigationCount++, showSessionPicker: showSessionPicker,
+            sandboxStatus: sandboxStatus);
     }
 
     [Fact]
@@ -615,6 +616,17 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
                 Assert.Empty(input.Text);
                 Assert.Empty(session.ViewModel.Draft);
             });
+            // A second Enter must neither send again nor add a newline to the
+            // empty draft, including after the send has re-rendered the input.
+            await PressAsync(global::Windows.System.VirtualKey.Enter);
+            await ui.RunOnUIAsync(() =>
+            {
+                Assert.Single(provider.SentMessages);
+                Assert.Empty(input.Text);
+                Assert.Empty(session.ViewModel.Draft);
+            });
+            if (start == 5 && length == 0)
+                await CaptureAsync(surface, "Composer-keyboard-enter-sent");
         }, interactiveKeyboard: true);
     }
 
@@ -1803,7 +1815,8 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
         SettingsManager? sandboxSettings = null,
         Action? onSandboxSettings = null,
         bool showSessionPicker = true,
-        bool interactiveKeyboard = false)
+        bool interactiveKeyboard = false,
+        SandboxStatusStore? sandboxStatus = null)
     {
         await ui.ResetContainerAsync();
         using var settingsDirectory = new TempDirectory();
@@ -1825,7 +1838,8 @@ public sealed class ReactorChatLayoutProofTests(UIThreadFixture ui)
             {
                 themeScope = new ChatThemeProofScope(Environment.GetEnvironmentVariable("OPENCLAW_PROOF_THEME") ?? "Light");
                 Application.Current.UnhandledException += reportException;
-                session = new ChatComposerFactory(new WinUIDispatcher(ui.Dispatcher), settingsStore).Create(
+                session = new ChatComposerFactory(new WinUIDispatcher(ui.Dispatcher), settingsStore,
+                    sandboxStatus ?? new SandboxStatusStore()).Create(
                     provider,
                     new ChatComposerHostActions(null, () => { }, (_, _) => Task.FromResult<string?>(null), () => { }, _ => { },
                         SandboxSettingsNavigation: onSandboxSettings ?? (() => { })),

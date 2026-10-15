@@ -235,6 +235,9 @@ public class LocalizationValidationTests
         "SandboxPage_1MiB.Content",
         "SandboxPage_64MiB.Content",
         "SandboxPage_SystemRun.Text",
+        // Canonical product surface name, unchanged across locales.
+        "SandboxPage_Title.Text",
+        "SandboxPage_OneDrive.Text",
         // SessionsPage runtime accessibility strings — seeded English-only across
         // all 5 locales using the deferred-translation pattern. These are
         // tooltip / AutomationProperties.Name overrides on the OpenChat button.
@@ -377,10 +380,6 @@ public class LocalizationValidationTests
         "SandboxPage_PresetLockedButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
         "SandboxPage_PresetBalancedButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
         "SandboxPage_PresetPermissiveButton.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
-        "SandboxPage_AllowWindowsUi.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
-        "SandboxPage_DocsAccessCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
-        "SandboxPage_DownloadsAccessCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
-        "SandboxPage_DesktopAccessCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
         "SettingsPage_NotificationSoundComboBox.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
         "VoiceSettingsPage_LanguageCombo.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
         "HubWindow_MainNavigation.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name",
@@ -1110,8 +1109,8 @@ public class LocalizationValidationTests
                 string[] naturalLoanwordLocales = key switch
                 {
                     "Onboarding_V2_LocalAiModel.Header" => ["nl-nl"],
-                    "Onboarding_V2_ProfileReadOnlyTitle.Text" => ["fr-fr"],
-                    "Onboarding_V2_ProfileFullTitle.Text" => ["nl-nl"],
+                    "Onboarding_V2_ProfileReadOnlyTitle.Text" or "SandboxPage_PresetStrict.Text" => ["fr-fr"],
+                    "Onboarding_V2_ProfileFullTitle.Text" or "SandboxPage_PresetOpen.Text" => ["nl-nl"],
                     "Onboarding_V2_Microphone" or "Onboarding_V2_Notifications" => ["fr-fr"],
                     "Onboarding_V2_Tokens" => ["nl-nl", "pt-br"],
                     _ => [],
@@ -1153,8 +1152,6 @@ public class LocalizationValidationTests
             var resources = LoadResw(Path.Combine(localeDirectory, "Resources.resw"));
             var title = resources["Chat_Composer_Sandbox_Title"];
             Assert.Contains(title, resources["SandboxPage_StatusOnTitle"], StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(title, resources["Chat_Composer_Sandbox_On"], StringComparison.OrdinalIgnoreCase);
-            Assert.Contains(title, resources["Chat_Composer_Sandbox_Off"], StringComparison.OrdinalIgnoreCase);
             Assert.Contains(resources["HubWindow_NavigationViewItem_Sandbox.Content"],
                 resources["Chat_Composer_Sandbox_OpenSettings"], StringComparison.OrdinalIgnoreCase);
         }
