@@ -964,6 +964,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
         _request.Dispose();
         _request = new();
         var token = _request.Token;
+        var reportedFailure = false;
         _busy = true;
         _activities.Clear();
         _activityKey = null;
@@ -1010,6 +1011,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
                 if (Client?.Phase is not (GatewayAiSetupPhase.Running or GatewayAiSetupPhase.Uncertain or
                     GatewayAiSetupPhase.VerificationRequired or GatewayAiSetupPhase.Prepared))
                     _providerOperationActive = false;
+                reportedFailure = true;
                 ReportFailure(ex);
                 _activityStatus = SetupInstallationStatus.Failed;
             }
@@ -1026,7 +1028,7 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
                 if (Client?.Phase is GatewayAiSetupPhase.Cancelled or GatewayAiSetupPhase.Rejected)
                 {
                     _providerOperationActive = false;
-                    if (Client.Phase == GatewayAiSetupPhase.Rejected)
+                    if (Client.Phase == GatewayAiSetupPhase.Rejected && !reportedFailure)
                         ShowError("Rejected");
                 }
                 Render();
@@ -1338,12 +1340,21 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
     private void Input_Changed(object sender, RoutedEventArgs e) => Render();
     private static string S(string key) => SetupLocalization.GetString("Onboarding_AiSetup_" + key);
     private static Visibility Visible(bool value) => value ? Visibility.Visible : Visibility.Collapsed;
-    private void ShowError(string key)
+    private void ShowError(string key, string? detail = null)
     {
-        if (BackdropLocked) _providerError = S(key);
+        var message = S(key);
+        detail ??= key is "VerificationFailed" or "Rejected"
+            ? Client?.VerificationFailure ?? Client?.Wizard?.Error : null;
+        if (!string.IsNullOrWhiteSpace(detail))
+        {
+            // Rejected is rendered again when the request settles. Retain the exact verification cause.
+            var sanitized = SetupLogger.Sanitize(detail);
+            message += " " + sanitized[..Math.Min(sanitized.Length, 2048)];
+        }
+        if (BackdropLocked) _providerError = message;
         else
         {
-            ErrorBar.Message = S(key);
+            ErrorBar.Message = message;
             ErrorBar.IsOpen = true;
         }
         Render();
@@ -1364,9 +1375,8 @@ public sealed partial class AiSetupPage : Page, IAsyncDisposable
             ShowError(error is LocalAiSelectionRejectedException ? "LocalChanged" :
                 error is UnauthorizedAccessException ? "AdminRequired" :
                 Client?.Phase == GatewayAiSetupPhase.Prepared ? "PreparedChanged" :
-                _localExpectedModel is not null || Client?.RequiresReconciliation == true ? "Uncertain" : "Failed");
-            if (error is LocalAiSelectionRejectedException)
-                ErrorBar.Message += " " + error.Message;
+                _localExpectedModel is not null || Client?.RequiresReconciliation == true ? "Uncertain" : "Failed",
+                error.Message);
             Render();
         }
     }
