@@ -1118,6 +1118,8 @@ internal sealed class WindowManager : IWindowManager
         _callbacks.ApplyTheme(_chatWindow);
         _callbacks.ApplyTheme(_connectionStatusWindow);
         _callbacks.ApplyTheme(_setupWindow);
+        _callbacks.ApplyTheme(_readyWindow);
+        _callbacks.ApplyTheme(_restartProgressWindow);
     }
 
     public void UpdateHubTitleBarStatus(

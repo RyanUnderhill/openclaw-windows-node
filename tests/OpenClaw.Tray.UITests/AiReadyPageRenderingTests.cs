@@ -8,6 +8,8 @@ using OpenClaw.SetupEngine.UI;
 using OpenClaw.SetupEngine.UI.Controls;
 using OpenClaw.SetupEngine.UI.Pages;
 using OpenClaw.TestSupport;
+using OpenClawTray.Helpers;
+using OpenClawTray.Services;
 using Xunit.Abstractions;
 
 namespace OpenClaw.Tray.UITests;
@@ -16,6 +18,109 @@ namespace OpenClaw.Tray.UITests;
 [Collection(UICollection.Name)]
 public sealed class AiReadyPageRenderingTests(UIThreadFixture ui, ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData(ElementTheme.Light)]
+    [InlineData(ElementTheme.Dark)]
+    public async Task OpenReadyAndRestartProgressFollowLiveAppThemeWithoutRemounting(ElementTheme initialTheme)
+    {
+        OnboardingNativeProof.AssertIsolatedRoots();
+        await ui.RunOnUIAsync(async () =>
+        {
+            var resources = OnboardingWindowsFlowTests.LoadProgressResources(
+                Environment.GetEnvironmentVariable("OPENCLAW_REPO_ROOT")!);
+            Application.Current.Resources.MergedDictionaries.Add(resources);
+            string? preference = initialTheme == ElementTheme.Light
+                ? SettingsManager.AppThemeLight : SettingsManager.AppThemeDark;
+            var applied = new List<Window>();
+            var manager = new WindowManager(ui.Dispatcher, new WindowManagerCallbacks(
+                GetAppState: () => null, GetAppNotificationService: () => null,
+                GetConnectionManager: () => null, GetGatewayRegistry: () => null,
+                GetSettings: () => null, GetGatewayDirectConnectService: () => null,
+                GetLocalAiRuntime: () => null, GetNodeService: () => null,
+                GetVoiceService: () => null, GetPageActivator: () => null,
+                GetPendingChatSessionKey: () => null, GetStartupArgs: () => null,
+                IsDeepLinkArg: _ => false, RequiresSetup: () => false,
+                Connect: () => { }, Disconnect: () => { },
+                SettingsSaved: (_, _) => { }, AdvancedSetupRequested: (_, _) => { },
+                SetupCompleted: (_, _) => { },
+                ApplyTheme: window =>
+                {
+                    if (window is not null) applied.Add(window);
+                    ThemeHelper.ApplyTheme(window, preference);
+                }));
+            SetupReadyWindow? ready = null;
+            try
+            {
+                var proof = new GatewayAiSetupCompletion(SetupCompletionIntent.CustodianOnboarding,
+                    "synthetic-theme", new string('A', 64), "synthetic/model", "main", 1,
+                    IdentityBinding: new string('B', 64), SessionKey: "agent:main:main");
+                ready = OnboardingNativeProof.CreateWindow(() => new SetupReadyWindow(
+                    ct => VerifySyntheticAsync(proof, ct),
+                    (_, _) => throw new InvalidOperationException("Must not navigate"),
+                    _ => new Observation(), () => { }, () => { }));
+                typeof(WindowManager).GetField("_readyWindow", BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .SetValue(manager, ready);
+                ready.Activate();
+                ready.AppWindow.Move(new(-32000, -32000));
+                manager.ShowSetupRestartProgress();
+                var progress = Assert.IsType<SetupLoadingWindow>(
+                    typeof(WindowManager).GetField("_restartProgressWindow", BindingFlags.NonPublic | BindingFlags.Instance)!
+                        .GetValue(manager));
+                progress.AppWindow.Move(new(-32000, -32000));
+                await ready.ShowReadyAsync(await VerifySyntheticAsync(proof, CancellationToken.None), CancellationToken.None);
+                ready.CommitPresentation();
+                var frame = Assert.IsType<Frame>(ready.Content);
+                var page = Assert.IsType<AiReadyPage>(frame.Content);
+                var readyRoot = Assert.IsType<Grid>(page.Content);
+                var progressRoot = Assert.IsType<SetupLoadingView>(progress.Content);
+                foreach (var theme in new[] { initialTheme, initialTheme == ElementTheme.Light ? ElementTheme.Dark : ElementTheme.Light })
+                {
+                    preference = theme == ElementTheme.Light ? SettingsManager.AppThemeLight : SettingsManager.AppThemeDark;
+                    applied.Clear();
+                    manager.ApplyThemeToOpenWindows();
+                    await TestSupport.WaitForRenderedConditionAsync(
+                        () => readyRoot.ActualTheme == theme && progressRoot.ActualTheme == theme,
+                        "Ready and restart progress reflect the live app theme");
+                    Assert.Equal(2, applied.Count);
+                    Assert.Contains(ready, applied);
+                    Assert.Contains(progress, applied);
+                    Assert.Equal(theme, frame.RequestedTheme);
+                    Assert.Equal(theme, progressRoot.RequestedTheme);
+                    Assert.Same(page, frame.Content);
+                    output.WriteLine($"Live theme {theme}: Ready={readyRoot.ActualTheme}; restart progress={progressRoot.ActualTheme}.");
+                }
+                ready.Invalidate();
+                var recovery = Assert.IsType<AiCompletionPage>(frame.Content);
+                preference = initialTheme == ElementTheme.Light ? SettingsManager.AppThemeLight : SettingsManager.AppThemeDark;
+                manager.ApplyThemeToOpenWindows();
+                await TestSupport.WaitForRenderedConditionAsync(
+                    () => recovery.ActualTheme == initialTheme && progressRoot.ActualTheme == initialTheme,
+                    "Ready recovery reflects the live app theme");
+                preference = null;
+                manager.ApplyThemeToOpenWindows();
+                await ui.YieldToRenderAsync();
+                Assert.Equal(ElementTheme.Default, frame.RequestedTheme);
+                Assert.Equal(ElementTheme.Default, progressRoot.RequestedTheme);
+                applied.Clear();
+                manager.BeginShutdown();
+                preference = SettingsManager.AppThemeDark;
+                manager.ApplyThemeToOpenWindows();
+                Assert.Empty(applied);
+                Assert.Equal(ElementTheme.Default, frame.RequestedTheme);
+                Assert.Equal(ElementTheme.Default, progressRoot.RequestedTheme);
+            }
+            finally
+            {
+                try { await manager.CloseForShutdownAsync(); }
+                finally
+                {
+                    if (ready is { IsClosed: false }) { ready.Close(); await ready.CleanupCompleted; }
+                    Application.Current.Resources.MergedDictionaries.Remove(resources);
+                }
+            }
+        });
+    }
+
     [Theory]
     [InlineData(ElementTheme.Light)]
     [InlineData(ElementTheme.Dark)]

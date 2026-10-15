@@ -436,6 +436,10 @@ and wrapping heading. The 180-DIP mascot frame includes its motion/glow gutter;
 the title-bar mark is 24 DIPs. Theme-aware Mica/Fluent surfaces retain solid
 background and high-contrast fallbacks.
 
+Ready, recovery and restart-progress windows participate in the existing live
+app-theme updates. Changing the app preference does not remount their content
+or repeat setup; shutdown retains its existing theme-update guard.
+
 Capabilities, installation review and AI provider setup use native controls.
 The [screen details](#screen-details) below own their behavior and consent rules;
 the [artwork section](#artwork-and-motion) covers motion and asset packaging.
