@@ -1190,6 +1190,13 @@ public sealed class NativeGatewaySetupTests
             Stop();
             return StopConnections();
         }
+        public Action Release { get; set; } = () => { };
+        public Task ReleaseAsync(CancellationToken cancellationToken)
+        {
+            events.Add("release");
+            Release();
+            return Task.CompletedTask;
+        }
         public Task<GatewayEndpointProvenance> InspectAsync(GatewayRecord record, CancellationToken cancellationToken)
         {
             events.Add("inspect");
