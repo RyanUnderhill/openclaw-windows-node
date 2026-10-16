@@ -7930,8 +7930,6 @@
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>使用者資料夾解析不完整</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>找不到或無法存取所需的個人資料夾。使用這些資料夾的命令遭封鎖。請查看資料夾清單，還原資料夾的 Windows 位置，然後重試。受保護資料夾與命令核准始終適用。</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>命令逾時：{0} 秒</value></data>
-  <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>命令檔案權限</value></data>
-  <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>新的隔離設定：嚴格不授權個人檔案，關閉網際網路。平衡讀取使用者設定目錄及已解析的「文件」「桌面」「下載」與可用 OneDrive 資料夾，不寫入個人檔案。開放讀寫相同範圍。平衡/開放開啟網際網路。不包括其他使用者與整個磁碟機。範圍之外的專案需明確自訂授權。受保護資料夾在隔離時適用，命令核准始終有效。已確認不支援隔離的 Windows 將顯示警告、停用沙箱控制項並使用未隔離執行。除非明確重新套用預設，否則保留現有 Custom 設定。剪貼簿與 Windows 介面保持獨立。Node Sandbox 顯示已解析位置與錯誤。</value></data>
   <data name="SandboxPage_LegacyBlockedTitle" xml:space="preserve"><value>需要檢查舊資料夾授權</value></data>
   <data name="SandboxPage_LegacyBlockedText" xml:space="preserve"><value>先前已篩除或衝突的授權保持封鎖狀態，避免無聲擴大存取。請檢查「封鎖」列，明確選擇受支援的存取或其他資料夾。受保護根目錄始終排除。</value></data>
   <data name="SandboxPage_IncludedUserFolders" xml:space="preserve"><value>Windows 解析的使用者資料夾根目錄（排除受保護後代）：</value></data>

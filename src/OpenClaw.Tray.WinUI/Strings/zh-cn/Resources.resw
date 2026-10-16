@@ -7930,8 +7930,6 @@
   <data name="SandboxPage_ScopeResolutionBlockedTitle" xml:space="preserve"><value>用户文件夹解析不完整</value></data>
   <data name="SandboxPage_ScopeResolutionBlockedText" xml:space="preserve"><value>找不到或无法访问所需的个人文件夹。使用这些文件夹的命令已被阻止。请查看文件夹列表，恢复文件夹的 Windows 位置，然后重试。受保护文件夹和命令审批始终适用。</value></data>
   <data name="SandboxPage_TimeoutFormat" xml:space="preserve"><value>命令超时：{0} 秒</value></data>
-  <data name="Onboarding_MxcFileScope.Title" xml:space="preserve"><value>命令文件权限</value></data>
-  <data name="Onboarding_MxcFileScope.Message" xml:space="preserve"><value>新的隔离配置：严格不授权个人文件，关闭互联网。平衡读取用户配置目录以及已解析的“文档”“桌面”“下载”和可用 OneDrive 文件夹，不写入个人文件。开放读写相同范围。平衡/开放开启互联网。不包括其他用户和整个驱动器。范围之外的项目需明确自定义授权。受保护文件夹在隔离时适用，命令审批始终有效。已确认不支持隔离的 Windows 将显示警告、禁用沙盒控件并使用未隔离执行。除非明确重新应用预设，否则保留现有 Custom 设置。剪贴板和 Windows 界面保持独立。Node Sandbox 显示已解析位置和错误。</value></data>
   <data name="SandboxPage_LegacyBlockedTitle" xml:space="preserve"><value>需要检查旧文件夹授权</value></data>
   <data name="SandboxPage_LegacyBlockedText" xml:space="preserve"><value>此前已过滤或冲突的授权保持阻止状态，避免在不知情的情况下扩大访问。请检查“阻止”行，明确选择受支持的访问或其他文件夹。受保护根目录始终排除。</value></data>
   <data name="SandboxPage_IncludedUserFolders" xml:space="preserve"><value>Windows 解析的用户文件夹根目录（排除受保护后代）：</value></data>
