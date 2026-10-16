@@ -10,7 +10,7 @@ using Xunit;
 namespace OpenClaw.Shared.Tests;
 
 [Collection("WebSocketClientBase")]
-public sealed class GatewayFixtureProtocolTests
+public sealed partial class GatewayFixtureProtocolTests
 {
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(20);
 
