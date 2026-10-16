@@ -122,6 +122,8 @@ From the repository root:
 
 This restores prerequisites as needed and builds the shared library, tray app, setup engine, and CLI tools with the required Windows runtime identifiers.
 
+Legacy MXC payload cleanup uses the Windows PowerShell included with Windows and does not require PowerShell 7.
+
 ### Build Individual Projects
 
 **Shared Library:**

@@ -673,6 +673,11 @@ public sealed class MxcCommandRunnerTests : IDisposable
             OpenClaw.Shared.ExecApprovals.ExecApprovalRevalidationResult.NotCurrent("revoked"));
         var result = await Runner(_ => throw new Exception("must not spawn")).RunAsync(command);
         Assert.Equal(NodeToolErrorCategory.ExecPolicyDenied, result.ErrorCategory);
+        var telemetry = NodeToolInvocation.GetSandboxTelemetry(result.ExecutionMode, result.ErrorCategory);
+        Assert.NotNull(telemetry);
+        Assert.True(telemetry.Requested);
+        Assert.False(telemetry.Applied);
+        Assert.Null(telemetry.Technology);
     }
 
     [Fact]

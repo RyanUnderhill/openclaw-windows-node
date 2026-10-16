@@ -444,12 +444,14 @@ public sealed class OpenTelemetryEndpointConnectionTests
         Assert.DoesNotContain("sensitive", values, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void NodeToolLogAttributes_DescribeBlockedMxcWithoutHostFallback()
+    [Theory]
+    [InlineData(NodeToolErrorCategory.SandboxUnavailable)]
+    [InlineData(NodeToolErrorCategory.ExecPolicyDenied)]
+    public void NodeToolLogAttributes_DescribeBlockedMxcWithoutHostFallback(NodeToolErrorCategory errorCategory)
     {
         var completion = FailureCompletion() with
         {
-            ErrorCategory = NodeToolErrorCategory.SandboxUnavailable,
+            ErrorCategory = errorCategory,
             ExecutionMode = NodeToolExecutionMode.Sandbox,
         };
 

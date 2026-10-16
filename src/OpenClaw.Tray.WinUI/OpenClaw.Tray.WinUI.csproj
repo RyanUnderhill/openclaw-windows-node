@@ -307,14 +307,14 @@
 
   <!-- Old incremental output must not be copied back by Inno, MSIX or Updatum ZIPs. -->
   <Target Name="RemoveLegacyMxcOutput" BeforeTargets="ComputeFilesToPublish;_ComputeAppxPackagePayload" AfterTargets="Build">
-    <Exec Command="pwsh -NoProfile -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(TargetDir)', '.'))&quot;" />
-    <Exec Condition="'$(PublishDir)' != ''" Command="pwsh -NoProfile -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(PublishDir)', '.'))&quot;" />
+    <Exec Command="&quot;$(SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(TargetDir)', '.'))&quot;" />
+    <Exec Condition="'$(PublishDir)' != ''" Command="&quot;$(SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(PublishDir)', '.'))&quot;" />
     <ItemGroup>
       <ResolvedFileToPublish Remove="**\tools\mxc\x64\wxc-exec.exe;**\tools\mxc\x64\wslcsdk.dll;**\tools\mxc\arm64\wxc-exec.exe;**\tools\mxc\arm64\wslcsdk.dll" />
     </ItemGroup>
   </Target>
   <Target Name="RemoveLegacyMxcAfterPublish" AfterTargets="Publish">
-    <Exec Condition="'$(PublishDir)' != ''" Command="pwsh -NoProfile -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(PublishDir)', '.'))&quot;" />
+    <Exec Condition="'$(PublishDir)' != ''" Command="&quot;$(SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(OpenClawRepoRoot)scripts\Remove-LegacyMxcPayload.ps1&quot; -PayloadPath &quot;$([System.IO.Path]::Combine('$(PublishDir)', '.'))&quot;" />
   </Target>
 
   <Target Name="WriteBuildAppIdentityMarker" AfterTargets="Build">

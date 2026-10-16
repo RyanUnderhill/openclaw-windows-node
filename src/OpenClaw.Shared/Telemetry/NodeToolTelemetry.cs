@@ -270,6 +270,7 @@ public sealed class NodeToolInvocation : IDisposable
                 Requested: true,
                 Applied: errorCategory switch
                 {
+                    NodeToolErrorCategory.ExecPolicyDenied => false,
                     NodeToolErrorCategory.SandboxDenied => false,
                     NodeToolErrorCategory.SandboxUnavailable => false,
                     NodeToolErrorCategory.SandboxFailure => null,
@@ -277,7 +278,7 @@ public sealed class NodeToolInvocation : IDisposable
                     _ => true,
                 },
                 Provider: "mxc",
-                Technology: errorCategory is NodeToolErrorCategory.SandboxDenied or
+                Technology: errorCategory is NodeToolErrorCategory.ExecPolicyDenied or NodeToolErrorCategory.SandboxDenied or
                     NodeToolErrorCategory.SandboxUnavailable or NodeToolErrorCategory.SandboxFailure or
                     NodeToolErrorCategory.Timeout ? null : "windows_basecontainer"),
             _ => null,

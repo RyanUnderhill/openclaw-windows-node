@@ -394,9 +394,11 @@ Reviewed attributes are:
   readers, but the runtime no longer selects the legacy approval path. Present
   only for `system.run` traces and failure/cancellation logs
 - `openclaw.node.tool.sandbox.requested`: whether MXC execution was requested;
-  Windows `system.run` always requests containment
+  supported Windows requests containment; positively unsupported Windows uses
+  approved host compatibility execution with this value set to `false`
 - `openclaw.node.tool.sandbox.applied`: whether the command was known to run
-  inside the sandbox; omitted for infrastructure failure or a deadline that
+  inside the sandbox; `false` when approval revalidation rejects the command
+  before launch; omitted for infrastructure failure or a deadline that
   may have interrupted a still-pending native launch
 - `openclaw.node.tool.sandbox.provider`: `mxc` when MXC was selected
 - `openclaw.node.tool.sandbox.technology`: `windows_basecontainer` for an
@@ -405,8 +407,9 @@ Reviewed attributes are:
   reason: `direct_argv_unsupported`, `custom_environment_unsupported`,
   `effective_shell_changed`, `fallback_shell_unapproved`, or
   `unsupported_sandbox_request`
-- Sandbox fallback attributes are retired from current execution. There is no
-  host fallback.
+- Sandbox fallback attributes are retired from current execution. Positively
+  unsupported Windows reports host execution with `sandbox.requested=false` and
+  `sandbox.applied=false`, without an MXC provider or applied technology.
 - `error.type`: exception type only
 
 Failure categories are `invalid_request`, `unsupported_command`, `node_busy`,

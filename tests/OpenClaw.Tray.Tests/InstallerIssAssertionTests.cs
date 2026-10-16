@@ -416,6 +416,8 @@ public sealed class InstallerIssAssertionTests
         Assert.DoesNotContain("RestoreMxcNodeBridge", trayProject);
         Assert.Contains("RemoveLegacyMxcOutput", trayProject);
         Assert.Contains("Remove-LegacyMxcPayload.ps1", trayProject);
+        Assert.Contains(@"$(SystemRoot)\System32\WindowsPowerShell\v1.0\powershell.exe", trayProject);
+        Assert.DoesNotContain("pwsh", trayProject, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("System.IO.Path]::Combine('$(TargetDir)', '.')", trayProject);
         Assert.Contains("System.IO.Path]::Combine('$(PublishDir)', '.')", trayProject);
         Assert.DoesNotContain("CopyMxc", trayProject);

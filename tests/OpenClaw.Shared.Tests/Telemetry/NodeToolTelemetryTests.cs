@@ -70,6 +70,34 @@ public sealed class NodeToolTelemetryTests
     }
 
     [Fact]
+    public void PrelaunchApprovalDenial_DoesNotReportAppliedSandboxOnRunOrRoot()
+    {
+        using var activities = new ActivityCollector();
+        var invocation = new NodeToolInvocation(NodeToolTransport.Gateway);
+        invocation.SetCommand("system.run");
+        var run = invocation.StartChild(NodeToolInvocation.SystemRunRunSpanName);
+
+        NodeToolInvocation.CompleteChild(
+            run,
+            NodeToolOutcome.Failure,
+            NodeToolErrorCategory.ExecPolicyDenied,
+            NodeToolExecutionMode.Sandbox);
+        invocation.Complete(
+            NodeToolOutcome.Failure,
+            NodeToolErrorCategory.ExecPolicyDenied,
+            NodeToolExecutionMode.Sandbox);
+
+        Assert.Equal(2, activities.Stopped.Count);
+        Assert.All(activities.Stopped, activity =>
+        {
+            Assert.Equal(true, activity.GetTagItem(NodeToolInvocation.SandboxRequestedTag));
+            Assert.Equal(false, activity.GetTagItem(NodeToolInvocation.SandboxAppliedTag));
+            Assert.Equal("mxc", activity.GetTagItem(NodeToolInvocation.SandboxProviderTag));
+            Assert.Null(activity.GetTagItem(NodeToolInvocation.SandboxTechnologyTag));
+        });
+    }
+
+    [Fact]
     public void Invocation_CreatesDetachedRootAndExplicitChild_AndCompletesOnce()
     {
         using var activities = new ActivityCollector();

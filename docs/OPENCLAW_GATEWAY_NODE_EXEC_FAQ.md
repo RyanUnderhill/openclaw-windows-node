@@ -615,7 +615,9 @@ The Windows app knows:
 - whether MXC is available on this host;
 - local filesystem, network, clipboard, desktop isolation, input-injection denial, timeout, and output policies;
 - whether the complete policy can run on BaseContainer with native sensitive-root
-  denial and without host ACL mutation. It never selects uncontained execution.
+  denial and without host ACL mutation. SDK, policy and execution failures block.
+  Only a positively unsupported-Windows verdict selects warned, approved
+  uncontained compatibility execution.
 
 Balanced/Open use the OS user profile and resolved redirected personal folders.
 They do not include a drive, every account under `C:\Users`, or projects outside
@@ -673,12 +675,15 @@ and `AssertApprovedCommandRan` in `tests/OpenClaw.E2ETests/Setup/MxcSetupAndConn
 
 Supported Windows always uses MXC. Only positively unsupported Windows uses
 uncontained compatibility execution; Node Sandbox warns and disables sandbox
-permission controls while preserving saved permissions and approvals. SDK load,
+permission controls. Saved permissions are retained but are not enforced during
+host execution; command approvals still apply. SDK load,
 probe uncertainty, policy and execution failures never trigger that route.
-Diagnostic execution mode distinguishes sandbox from host. The old Off and
-fallback-block switches are retired; automatic compatibility does not preserve
-an old explicit fallback-block choice. That upgrade intent requires a separate
-compatibility decision before release readiness is claimed.
+Diagnostic execution mode distinguishes sandbox from host. The old sandbox Off
+switch and advanced `SystemRunBlockHostFallbackWhenMxcUnavailable` JSON setting
+are retired. Automatic compatibility does not preserve that setting's old
+conditional refusal of host execution. Turn off **Run system tools** to refuse
+Windows-node `system.run` execution regardless of Windows support. This node
+permission does not disable the Gateway's separate `exec` tool.
 
 Windows UI API compatibility is always available inside MXC. PowerShell and
 some console programs initialize these APIs even without showing a window.
